@@ -55,9 +55,10 @@ std::string cableCurrentLabel(CableCurrent current)
 double cableCurrentMaxAmps(CableCurrent current)
 {
     switch (current) {
-    case CableCurrent::ThreeAmp: return 3.0;
     case CableCurrent::FiveAmp:  return 5.0;
-    default:                     return 0.9;
+    // Every Type-C cable must carry 3A. Real USB 2.0 e-markers report 00b
+    // routinely, so treat "USB default" as 3A, as upstream does.
+    default:                     return 3.0;
     }
 }
 
@@ -123,8 +124,11 @@ CableVDO decodeCableVDO(uint32_t vdo, bool isActive)
     case 3: cable.maxVbusVolts = 50; break;
     }
 
-    double amps = cableCurrentMaxAmps(cable.currentRating);
-    cable.maxWatts = static_cast<int>(cable.maxVbusVolts * amps);
+    // USB PD never delivers above 48V (EPR fixed and AVS both top out
+    // there); a 50V rating is insulation headroom. 50V/5A cable -> 240W.
+    const int deliverableVolts = cable.maxVbusVolts < 48 ? cable.maxVbusVolts : 48;
+    const double amps = cableCurrentMaxAmps(cable.currentRating);
+    cable.maxWatts = static_cast<int>(deliverableVolts * amps + 0.5);
 
     return cable;
 }

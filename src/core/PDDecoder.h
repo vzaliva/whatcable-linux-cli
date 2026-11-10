@@ -45,9 +45,9 @@ struct CableVDO {
     CableSpeed speed = CableSpeed::USB20;
     CableCurrent currentRating = CableCurrent::USBDefault;
     bool vbusThroughCable = false;
-    int maxVbusVolts = 20;
+    int maxVbusVolts = 20;     // rated voltage from the VDO (up to 50V)
     bool isActive = false;
-    int maxWatts = 0;
+    int maxWatts = 0;          // deliverable: min(rated V, 48V) x current
 };
 
 std::string productTypeLabel(ProductType type);
