@@ -42,40 +42,25 @@ std::optional<TypeCIdentity> TypeCPort::readIdentity(const std::string &path)
     if (!SysfsReader::pathExists(idPath))
         return std::nullopt;
 
+    // Read each VDO by name. The Discover Identity order (ID header, cert
+    // stat, product, product-type VDOs) does not match alphabetical order.
+    auto readVdo = [&idPath](const char *name) -> uint32_t {
+        return SysfsReader::readHexAttribute(idPath + "/" + name).value_or(0);
+    };
+
     TypeCIdentity id;
-    auto vid = SysfsReader::readHexAttribute(idPath + "/id_header");
-    if (vid)
-        id.vendorId = static_cast<uint16_t>(*vid & 0xFFFF);
-
-    auto pid = SysfsReader::readHexAttribute(idPath + "/product");
-    if (pid)
-        id.productId = static_cast<uint16_t>(*pid & 0xFFFF);
-
-    std::error_code ec;
-    std::vector<std::string> names;
-    for (const auto &e : fs::directory_iterator(fs::path(idPath), fs::directory_options::skip_permission_denied, ec)) {
-        if (!ec && e.is_regular_file(ec))
-            names.push_back(e.path().filename().string());
-    }
-    std::sort(names.begin(), names.end());
-
-    for (const auto &entry : names) {
-        if (!entry.starts_with("vdo") &&
-            entry != "id_header" &&
-            entry != "cert_stat" &&
-            entry != "product" &&
-            entry != "product_type_vdo1" &&
-            entry != "product_type_vdo2" &&
-            entry != "product_type_vdo3")
-            continue;
-
-        auto val = SysfsReader::readHexAttribute(idPath + "/" + entry);
-        if (val)
-            id.vdos.push_back(*val);
-    }
-
-    if (id.vendorId == 0 && id.vdos.empty())
+    id.idHeader = readVdo("id_header");
+    // All-zero until Discover Identity completes; UCSI often never fills it.
+    if (id.idHeader == 0)
         return std::nullopt;
+
+    id.certStat = readVdo("cert_stat");
+    id.product = readVdo("product");
+    id.productTypeVdos = {readVdo("product_type_vdo1"),
+                          readVdo("product_type_vdo2"),
+                          readVdo("product_type_vdo3")};
+    id.vendorId = static_cast<uint16_t>(id.idHeader & 0xFFFF);
+    id.productId = static_cast<uint16_t>(id.product >> 16);
 
     return id;
 }

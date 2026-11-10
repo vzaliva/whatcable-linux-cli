@@ -13,15 +13,17 @@ namespace WhatCable {
 struct CableInfo {
     bool isActive = false;
     bool isPassive = false;
-    std::string cableType;           // "active", "passive"
+    std::string cableType;           // resolved: "active", "passive", or sysfs value
     std::string plugType;
 
     std::optional<CableSpeed> speed;
     std::optional<CableCurrent> currentRating;
-    int maxWatts = 0;
+    int ratedVbusVolts = 0;          // from the Cable VDO (up to 50V); 0 if not read
+    int maxWatts = 0;                // deliverable (voltage capped at 48V)
 
     uint16_t vendorId = 0;
     std::string vendorName;
+    std::optional<TypeCIdentity> identity;   // raw Discover Identity VDOs
 
     std::map<std::string, std::string> rawAttributes;
 

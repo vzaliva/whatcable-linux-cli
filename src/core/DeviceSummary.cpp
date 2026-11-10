@@ -165,8 +165,8 @@ DeviceSummary DeviceSummary::fromTypeCPort(
     }
 
     if (port.hasPartner && port.partner) {
-        if (port.partner->identity && !port.partner->identity->vdos.empty()) {
-            auto hdr = decodeIDHeader(port.partner->identity->vdos[0]);
+        if (port.partner->identity) {
+            auto hdr = decodeIDHeader(port.partner->identity->idHeader);
             std::string productLabel = productTypeLabel(hdr.ufpProductType);
             std::string vendorLabel = VendorDB::lookup(hdr.vendorId);
             bool hasVendor = !startsWithHexVid(vendorLabel);

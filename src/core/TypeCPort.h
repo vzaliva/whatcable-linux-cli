@@ -2,6 +2,7 @@
 // Linux equivalent of USBCPort.swift — reads /sys/class/typec/
 #pragma once
 
+#include <array>
 #include <map>
 #include <optional>
 #include <string>
@@ -10,10 +11,18 @@
 
 namespace WhatCable {
 
+// Discover Identity response, read by file name from <dev>/identity/.
+// Only constructed when id_header is non-zero: the kernel shows 0x0 in
+// every file until Discover Identity has completed.
 struct TypeCIdentity {
     uint16_t vendorId = 0;
     uint16_t productId = 0;
-    std::vector<uint32_t> vdos;
+    uint32_t idHeader = 0;
+    uint32_t certStat = 0;
+    uint32_t product = 0;
+    // product_type_vdo1..3; 0 means "not provided". For cables, [0] is the
+    // Cable VDO and [1] the Active Cable VDO 2.
+    std::array<uint32_t, 3> productTypeVdos{};
 };
 
 struct TypeCPartner {

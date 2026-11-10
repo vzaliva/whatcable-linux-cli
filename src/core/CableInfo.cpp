@@ -18,19 +18,28 @@ std::optional<CableInfo> CableInfo::fromTypeCCable(const TypeCCable &cable)
         info.vendorId = id.vendorId;
         info.vendorName = VendorDB::lookup(id.vendorId);
 
-        if (!id.vdos.empty()) {
-            auto hdr = decodeIDHeader(id.vdos[0]);
-            bool active = (hdr.ufpProductType == ProductType::ActiveCable);
-
-            if (id.vdos.size() > 3) {
-                auto cableVdo = decodeCableVDO(id.vdos[3], active);
-                info.speed = cableVdo.speed;
-                info.currentRating = cableVdo.currentRating;
-                info.maxWatts = cableVdo.maxWatts;
-                info.isActive = cableVdo.isActive;
-                info.isPassive = !cableVdo.isActive;
-            }
+        // SOP' ID header carries the cable type in the UFP product-type
+        // field. Only override the sysfs "type" when it says so explicitly.
+        const auto hdr = decodeIDHeader(id.idHeader);
+        if (hdr.ufpProductType == ProductType::ActiveCable) {
+            info.isActive = true;
+            info.isPassive = false;
+            info.cableType = "active";
+        } else if (hdr.ufpProductType == ProductType::PassiveCable) {
+            info.isActive = false;
+            info.isPassive = true;
+            info.cableType = "passive";
         }
+
+        const uint32_t cableVdo1 = id.productTypeVdos[0];
+        if (cableVdo1 != 0) {
+            const auto cableVdo = decodeCableVDO(cableVdo1, info.isActive);
+            info.speed = cableVdo.speed;
+            info.currentRating = cableVdo.currentRating;
+            info.ratedVbusVolts = cableVdo.maxVbusVolts;
+            info.maxWatts = cableVdo.maxWatts;
+        }
+        info.identity = id;
     }
 
     return info;
