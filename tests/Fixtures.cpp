@@ -168,6 +168,13 @@ void buildDevLaptop(FakeSysfs &fs)
     cable.vdo2 = kActiveUsb4CableVdo2;
     addCable(fs, 1, "passive", cable);       // sysfs type disagrees with the header
 
+    // port2: only an old PD 2.0 cable, with unusual e-marker data.
+    addTypecPort(fs, 2, "[source] sink", "[host] device", "default");
+    Identity oldCable;
+    oldCable.idHeader = 3u << 27;           // passive cable, vendor ID 0
+    oldCable.vdo1 = 1u | (2u << 5) | (3u << 9);   // Gen 1, 5 A, latency 0000
+    addCable(fs, 2, "passive", oldCable, "2.0");
+
     // A small usb.ids: Anker (0x291A) is deliberately missing, as in the
     // real file, so it comes from the built-in fallback table.
     fs.writeBytes("/usr/share/hwdata/usb.ids",

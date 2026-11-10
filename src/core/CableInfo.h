@@ -4,6 +4,7 @@
 
 #include "TypeCPort.h"
 #include "PDDecoder.h"
+#include "CableTrust.h"
 #include <map>
 #include <optional>
 #include <string>
@@ -33,6 +34,7 @@ struct CableInfo {
     std::optional<CableVDO> vdo;              // decoded Cable VDO 1
     std::optional<ActiveCableVDO2> activeVdo2;   // active cables only
     std::optional<uint32_t> certificationXid; // USB-IF XID from cert_stat, if non-zero
+    std::vector<CableTrustNote> trustNotes;   // hedged notes, never a verdict
 
     std::map<std::string, std::string> rawAttributes;
 

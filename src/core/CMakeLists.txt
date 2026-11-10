@@ -5,6 +5,7 @@ add_library(whatcablecore STATIC
     PowerDelivery.cpp
     PDDecoder.cpp
     CableInfo.cpp
+    CableTrust.cpp
     VendorDB.cpp
     UsbClassDB.cpp
     DeviceSummary.cpp

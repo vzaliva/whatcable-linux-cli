@@ -58,6 +58,9 @@ void addBattery(FakeSysfs &fs, const std::string &name, const std::string &statu
 //          a spec-valid active USB4 5 A / 50 V e-marked cable whose
 //          cert_stat would read as a passive cable if mistaken for the ID
 //          header.
+//   port2: nothing attached but a PD 2.0 cable with a zero vendor ID and
+//          a reserved latency (two cable notes); its bits 10:9 are set,
+//          which a PD 3.x decode would read as 50 V / 240 W.
 //   /usr/share/hwdata/usb.ids: a few vendors (not Anker).
 //   BAT0 "Not charging" at 93% with an 80% limit; a mouse battery
 //   (scope Device) that is discharging; one USB device with binary

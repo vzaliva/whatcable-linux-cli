@@ -83,6 +83,7 @@ TEST_CASE(active_cable_full_decode)
     CHECK(cable->activeVdo2->retimer);
     CHECK(cable->speed == CableSpeed::USB4Gen3);
     CHECK_EQ(cable->certificationXid, std::optional<uint32_t>(12345));
+    CHECK(cable->trustNotes.empty());
 }
 
 TEST_CASE(pd2_active_cable_has_no_vdo2)
@@ -134,6 +135,32 @@ TEST_CASE(reserved_speed_is_not_reported_as_usb2)
     CHECK(!cable->speed);
     REQUIRE(cable->vdo);
     CHECK(cable->vdo->speedReserved);
+    REQUIRE(cable->trustNotes.size() == 1);
+    CHECK_EQ(cable->trustNotes[0].code, "reservedSpeedEncoding");
+}
+
+TEST_CASE(trust_notes_are_hedged_and_skip_the_ffff_sentinel)
+{
+    const auto clean = decodeCableVDO((1u << 13) | (1u << 5), false);
+    CHECK(cableTrustNotes(0x05AC, &clean).empty());
+    CHECK(cableTrustNotes(0xFFFF, &clean).empty());      // spec's "no vendor ID"
+
+    const auto zero = cableTrustNotes(0x0000, &clean);
+    REQUIRE(zero.size() == 1);
+    CHECK_EQ(zero[0].code, "zeroVendorID");
+    CHECK(zero[0].detail.find("common on genuine cables") != std::string::npos);
+
+    const auto bad = decodeCableVDO((1u << 17) | (2u << 11), false);   // EPR@20V, term 10, latency 0
+    std::vector<std::string> codes;
+    for (const auto &n : cableTrustNotes(0x05AC, &bad))
+        codes.push_back(n.code);
+    CHECK(codes == (std::vector<std::string>{"invalidCableTermination",
+                                             "reservedCableLatencyEncoding",
+                                             "eprClaimedWithLowMaxVoltage"}));
+    for (const auto &n : cableTrustNotes(0, &bad)) {
+        CHECK(n.title.find("fake") == std::string::npos);
+        CHECK(n.detail.find("counterfeit") == std::string::npos);
+    }
 }
 
 TEST_CASE(partners_and_cables_are_not_listed_as_ports)
@@ -141,7 +168,7 @@ TEST_CASE(partners_and_cables_are_not_listed_as_ports)
     FakeSysfs fs;
     buildDevLaptop(fs);
     const auto ports = TypeCPort::enumerate();
-    REQUIRE(ports.size() == 2);
+    REQUIRE(ports.size() == 3);
     CHECK_EQ(ports[0].portNumber, 0);
     CHECK_EQ(ports[1].portNumber, 1);
     CHECK_EQ(ports[0].pdName, "pd0");

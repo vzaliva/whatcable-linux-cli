@@ -242,6 +242,18 @@ void printTextSummary(std::ostream &out, const DeviceManager &mgr, bool showRaw)
                 out << "    " << DIM << diag.detail << RESET << '\n';
         }
 
+        // Hedged notes about the e-marker data: unusual, not a verdict.
+        if (dev.cable && !dev.cable->trustNotes.empty()) {
+            out << "  " << BOLD << "Cable notes:" << RESET << '\n';
+            for (const auto &note : dev.cable->trustNotes) {
+                if (note.isInfo)
+                    out << "    • " << note.title << '\n';
+                else
+                    out << "    " << YELLOW << "• " << note.title << RESET << '\n';
+                out << "      " << DIM << note.detail << RESET << '\n';
+            }
+        }
+
         if (dev.powerDelivery && !dev.powerDelivery->sourceCapabilities.empty()) {
             const bool isCharger = dev.typecPort && dev.typecPort->isSink();
             out << "  " << BOLD << (isCharger ? "Charger profiles:" : "Partner source profiles:")
@@ -691,6 +703,23 @@ std::string deviceToJson(const DeviceSummary &dev, bool showRaw, int depth)
                 };
                 emitC([&] { appendObjectJson(s, "activeCable", fields, d2); });
             }
+            emitC([&] {
+                jsonNlIndent(s, d2);
+                s += "\"trustNotes\": [";
+                for (size_t i = 0; i < c.trustNotes.size(); ++i) {
+                    const auto &n = c.trustNotes[i];
+                    if (i)
+                        s += ',';
+                    jsonNlIndent(s, d3);
+                    s += "{\"code\": " + jsonQuoted(n.code) +
+                         ", \"severity\": " + jsonQuoted(n.isInfo ? "info" : "unusual") +
+                         ", \"title\": " + jsonQuoted(n.title) +
+                         ", \"detail\": " + jsonQuoted(n.detail) + '}';
+                }
+                if (!c.trustNotes.empty())
+                    jsonNlIndent(s, d2);
+                s += ']';
+            });
             jsonNlIndent(s, d1);
             s += '}';
         });

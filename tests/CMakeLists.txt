@@ -26,6 +26,12 @@ set_tests_properties(cli_text PROPERTIES
     ENVIRONMENT "WHATCABLE_SYSFS_ROOT=${WHATCABLE_FIXTURE}"
     PASS_REGULAR_EXPRESSION "Plugged in at 45W, not charging")
 
+add_test(NAME cli_text_cable_notes COMMAND whatcable-linux)
+set_tests_properties(cli_text_cable_notes PROPERTIES
+    FIXTURES_REQUIRED cli_fixture
+    ENVIRONMENT "WHATCABLE_SYSFS_ROOT=${WHATCABLE_FIXTURE}"
+    PASS_REGULAR_EXPRESSION "Cable notes:.*E-marker reports no vendor identity")
+
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
     add_test(NAME cli_json

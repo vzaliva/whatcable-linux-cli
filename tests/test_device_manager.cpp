@@ -45,7 +45,7 @@ TEST_CASE(dev_laptop_lists_ports_and_devices)
             CHECK(d.headline != "USB-C Port -1");
         }
     }
-    CHECK_EQ(typec, 2);
+    CHECK_EQ(typec, 3);
     CHECK(find(mgr.devices(), "USB Receiver") != nullptr);
 }
 
@@ -100,6 +100,26 @@ TEST_CASE(sourcing_port_is_not_a_charger)
     CHECK(hasBullet(*port1, "Cable data support: USB4, USB 3.2 Gen 2+ x2, USB 2.0"));
     CHECK(hasBullet(*port1, "Cable vendor: Apple, Inc."));
     CHECK(hasBullet(*port1, "USB-IF certification ID (XID): 402653184"));
+    CHECK(port1->cable->trustNotes.empty());
+}
+
+TEST_CASE(old_cable_gets_notes_and_pd2_decode)
+{
+    FakeSysfs fs;
+    buildDevLaptop(fs);
+    DeviceManager mgr;
+    mgr.refresh();
+    const DeviceSummary *port2 = find(mgr.devices(), "USB-C Port 2");
+    REQUIRE(port2);
+    REQUIRE(port2->cable);
+    CHECK_EQ(port2->cable->maxWatts, 100);           // not 240: PD 2.0 bits 10:9
+    CHECK(hasBullet(*port2, "Cable max power: 100W"));
+    CHECK(!hasBulletPrefix(*port2, "EPR"));
+    REQUIRE(port2->cable->trustNotes.size() == 2);
+    CHECK_EQ(port2->cable->trustNotes[0].code, "zeroVendorID");
+    CHECK(port2->cable->trustNotes[0].isInfo);
+    CHECK_EQ(port2->cable->trustNotes[1].code, "reservedCableLatencyEncoding");
+    CHECK(!port2->cable->trustNotes[1].isInfo);
 }
 
 TEST_CASE(usb_device_vendor_from_usb_ids)

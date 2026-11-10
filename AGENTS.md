@@ -84,6 +84,7 @@ cmake --build build
 | `src/core/DeviceManager.h/cpp` | Aggregates all sources, correlates data, owns refresh logic |
 | `src/core/UDevMonitor.h/cpp` | libudev monitor + fd for `poll()` |
 | `src/core/VendorDB.h/cpp` | USB VID → vendor name lookup (`usb.ids`, then a built-in fallback) |
+| `src/core/CableTrust.h/cpp` | Hedged notes about unusual cable e-marker data (never a verdict) |
 | `src/core/UsbClassDB.h/cpp` | USB class code → human name |
 
 ## Adding New Vendors

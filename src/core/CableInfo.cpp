@@ -56,6 +56,7 @@ std::optional<CableInfo> CableInfo::fromTypeCCable(const TypeCCable &cable)
             if (info.isActive && !pd2 && activeVdo2 != 0)
                 info.activeVdo2 = decodeActiveCableVDO2(activeVdo2);
         }
+        info.trustNotes = cableTrustNotes(id.vendorId, info.vdo ? &*info.vdo : nullptr);
         info.identity = id;
     }
 

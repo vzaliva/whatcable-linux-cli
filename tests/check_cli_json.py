@@ -38,7 +38,7 @@ def port(devices, n):
 devices = run("--json")
 run("--json", "--raw")
 
-check(sum(d["category"] == "typec" for d in devices) == 2, "two Type-C ports")
+check(sum(d["category"] == "typec" for d in devices) == 3, "three Type-C ports")
 
 p0 = port(devices, 0)
 check(p0 is not None, "port 0 present")
@@ -81,8 +81,23 @@ if p1:
     check(act.get("activeElement") == "re-timer", "active element")
     check(act.get("usb4Supported") is True and act.get("twoLanes") is True, "VDO2 protocols")
     check(act.get("maxOperatingTempC") == 70, "VDO2 temperature")
+    check(cable.get("trustNotes") == [], "no trust notes for a spec-valid cable")
     ident1 = p1["typec"].get("partner", {}).get("identity", {})
     check(ident1.get("productType") == "USB Peripheral", "phone identity")
+
+p2 = port(devices, 2)
+check(p2 is not None, "port 2 present")
+if p2:
+    cable = p2.get("cable", {})
+    notes = cable.get("trustNotes", [])
+    check([n.get("code") for n in notes] == ["zeroVendorID", "reservedCableLatencyEncoding"],
+          "port 2 cable note codes")
+    check([n.get("severity") for n in notes] == ["info", "unusual"], "port 2 note severities")
+    check(all(n.get("title") and n.get("detail") for n in notes), "notes have title and detail")
+    check(cable.get("pdRevision") == "2.0", "cable PD revision")
+    check(cable.get("vdo", {}).get("pd2Layout") is True, "PD 2.0 layout")
+    check(cable.get("maxWatts") == 100 and cable.get("ratedVbusVolts") == 20, "PD 2.0 cable 100 W")
+    check(cable.get("certificationXid") is None, "no XID -> null")
 
 for f in failures:
     print("FAIL:", f)
