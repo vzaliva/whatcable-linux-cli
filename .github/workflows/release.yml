@@ -20,13 +20,16 @@ jobs:
       - name: Install dependencies
         run: |
           dnf install -y gcc-c++ cmake pkgconf-pkg-config \
-            systemd-devel tar gzip
+            systemd-devel tar gzip python3
 
       - name: Configure
         run: cmake -B build -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
 
       - name: Package CLI binary
         run: |
