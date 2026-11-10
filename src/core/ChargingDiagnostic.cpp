@@ -79,7 +79,16 @@ std::optional<ChargingDiagnostic> ChargingDiagnostic::evaluate(
 
     // Power is flowing, but say "charging" only if the battery agrees.
     using Status = SystemBattery::Status;
-    const Status status = battery ? battery->status : Status::Unknown;
+    Status status = battery ? battery->status : Status::Unknown;
+    // At or above a charge limit, some firmware reports "Discharging" while
+    // it lets the battery drain back down to the limit. That is the limit
+    // working, not a charger that can't keep up: treat it as not charging.
+    const bool atChargeLimit = battery && battery->capacityPercent &&
+                               battery->chargeLimitPercent &&
+                               *battery->chargeLimitPercent < 100 &&
+                               *battery->capacityPercent >= *battery->chargeLimitPercent;
+    if (status == Status::Discharging && atChargeLimit)
+        status = Status::NotCharging;
     const std::string contractDetail = diag.detail;
     auto withContract = [&](const std::string &text) {
         return contractDetail.empty() ? text : text + ". " + contractDetail;
@@ -93,9 +102,7 @@ std::optional<ChargingDiagnostic> ChargingDiagnostic::evaluate(
     case Status::NotCharging:
         std::snprintf(buf, sizeof(buf), "Plugged in at %dW, not charging", negotiatedW);
         diag.summary = buf;
-        if (battery->capacityPercent && battery->chargeLimitPercent &&
-            *battery->chargeLimitPercent < 100 &&
-            *battery->capacityPercent >= *battery->chargeLimitPercent) {
+        if (atChargeLimit) {
             std::snprintf(buf, sizeof(buf), "Battery at %d%%, held at the %d%% charge limit",
                           *battery->capacityPercent, *battery->chargeLimitPercent);
             diag.detail = withContract(buf);

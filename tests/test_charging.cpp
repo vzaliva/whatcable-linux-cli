@@ -123,6 +123,35 @@ TEST_CASE(discharging_while_plugged_in_warns)
     CHECK(d.bottleneck == ChargingDiagnostic::DeviceLimit);
     CHECK(d.isWarning);
     CHECK_EQ(d.summary, "Plugged in at 30W, but battery is discharging");
+
+    // Below a charge limit, discharging is still a real warning.
+    d = eval(65, std::nullopt, 64000, battery(Status::Discharging, 79, 80));
+    CHECK(d.bottleneck == ChargingDiagnostic::ChargerLimit);
+    CHECK(d.isWarning);
+}
+
+TEST_CASE(discharging_at_a_charge_limit_is_not_a_warning)
+{
+    // Firmware draining the battery back down to its limit reports
+    // "Discharging"; that is the limit working, not a weak charger.
+    auto d = eval(65, std::nullopt, 64000, battery(Status::Discharging, 85, 80));
+    CHECK(d.bottleneck == ChargingDiagnostic::Fine);
+    CHECK(!d.isWarning);
+    CHECK_EQ(d.summary, "Plugged in at 64W, not charging");
+    CHECK_EQ(d.detail, "Battery at 85%, held at the 80% charge limit");
+
+    d = eval(65, std::nullopt, 64000, battery(Status::Discharging, 80, 80));   // exactly at the limit
+    CHECK(!d.isWarning);
+
+    d = eval(65, std::nullopt, 30000, battery(Status::Discharging, 85, 80));
+    CHECK(d.bottleneck == ChargingDiagnostic::DeviceLimit);
+    CHECK(!d.isWarning);
+
+    // A 100% "limit" is no limit: discharging at 100% still warns.
+    d = eval(65, std::nullopt, 64000, battery(Status::Discharging, 100, 100));
+    CHECK(d.isWarning);
+    // The JSON still reports the raw battery status.
+    CHECK(d.battery->status == Status::Discharging);
 }
 
 TEST_CASE(bottleneck_codes_are_stable)
