@@ -41,12 +41,57 @@ void onSignal(int)
     g_run = false;
 }
 
+// Length of the well-formed UTF-8 sequence starting at sv[i], or 0 if the
+// bytes there are not valid UTF-8 (RFC 3629: no overlongs, no surrogates).
+size_t utf8SequenceLength(std::string_view sv, size_t i)
+{
+    const auto byte = [&](size_t k) { return static_cast<unsigned char>(sv[k]); };
+    const unsigned char b0 = byte(i);
+    size_t len;
+    unsigned char lo = 0x80, hi = 0xBF;   // allowed range of the second byte
+    if (b0 >= 0xC2 && b0 <= 0xDF) len = 2;
+    else if (b0 >= 0xE0 && b0 <= 0xEF) {
+        len = 3;
+        if (b0 == 0xE0) lo = 0xA0;
+        if (b0 == 0xED) hi = 0x9F;
+    } else if (b0 >= 0xF0 && b0 <= 0xF4) {
+        len = 4;
+        if (b0 == 0xF0) lo = 0x90;
+        if (b0 == 0xF4) hi = 0x8F;
+    } else
+        return 0;
+    if (i + len > sv.size())
+        return 0;
+    if (byte(i + 1) < lo || byte(i + 1) > hi)
+        return 0;
+    for (size_t k = 2; k < len; ++k) {
+        if (byte(i + k) < 0x80 || byte(i + k) > 0xBF)
+            return 0;
+    }
+    return len;
+}
+
 std::string jsonEscape(std::string_view sv)
 {
     std::string out;
     out.reserve(sv.size() + 8);
-    for (unsigned char uc : sv) {
-        char c = static_cast<char>(uc);
+    for (size_t i = 0; i < sv.size(); ++i) {
+        const unsigned char uc = static_cast<unsigned char>(sv[i]);
+        const char c = sv[i];
+        if (uc >= 0x80) {
+            // Raw sysfs attributes can be binary (e.g. bos_descriptors).
+            // Pass valid UTF-8 through; emit stray bytes as \u00XX so the
+            // document stays valid JSON.
+            if (const size_t len = utf8SequenceLength(sv, i)) {
+                out.append(sv.substr(i, len));
+                i += len - 1;
+            } else {
+                char buf[16];
+                std::snprintf(buf, sizeof(buf), "\\u%04x", uc);
+                out += buf;
+            }
+            continue;
+        }
         switch (c) {
         case '"': out += "\\\""; break;
         case '\\': out += "\\\\"; break;
