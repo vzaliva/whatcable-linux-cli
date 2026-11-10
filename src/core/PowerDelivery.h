@@ -27,11 +27,12 @@ struct PowerDataObject {
     std::string typeLabel() const;
 };
 
+// One /sys/class/usb_power_delivery/pdN entry. Which device it describes
+// (a port's own capabilities or its partner's) is known only from the
+// Type-C side: TypeCPort::pdName and TypeCPartner::pdName.
 struct PowerDeliveryPort {
     std::string sysfsPath;
-    std::string name;
-    std::string parentPortType;
-    int parentPortNumber = -1;
+    std::string name;          // "pd0", "pd1", ...
 
     std::vector<PowerDataObject> sourceCapabilities;
     std::vector<PowerDataObject> sinkCapabilities;
@@ -40,6 +41,10 @@ struct PowerDeliveryPort {
     std::optional<int> activeSourcePdoIndex;
 
     std::map<std::string, std::string> rawAttributes;
+
+    // Mark the source PDO matching a negotiated voltage as active. Only fixed
+    // PDOs are matched: a voltage can't identify a PPS/AVS contract.
+    void markActiveSourcePdo(int negotiatedMV);
 
     static std::vector<PowerDeliveryPort> enumerate();
 

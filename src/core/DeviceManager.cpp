@@ -19,15 +19,23 @@ void DeviceManager::refresh()
     m_pdPorts = PowerDeliveryPort::enumerate();
 
     for (const auto &tcPort : m_typecPorts) {
+        // The partner's PD entry holds what the far end offers (a charger's
+        // source PDOs). The port's own entry (tcPort.pdName) describes this
+        // machine, so it is never used as the charger.
         std::optional<PowerDeliveryPort> pd;
-        for (const auto &pdPort : m_pdPorts) {
-            if (pdPort.parentPortNumber == tcPort.portNumber) {
-                pd = pdPort;
-                break;
+        if (tcPort.partner && !tcPort.partner->pdName.empty()) {
+            for (const auto &pdPort : m_pdPorts) {
+                if (pdPort.name == tcPort.partner->pdName) {
+                    pd = pdPort;
+                    break;
+                }
             }
         }
-        if (!pd && m_pdPorts.size() == 1 && m_typecPorts.size() == 1)
-            pd = m_pdPorts[0];
+
+        const auto &psy = tcPort.powerSupply;
+        if (pd && tcPort.isSink() && psy && psy->online &&
+            psy->voltageNowUV && *psy->voltageNowUV > 0)
+            pd->markActiveSourcePdo(*psy->voltageNowUV / 1000);
 
         std::optional<CableInfo> cable;
         if (tcPort.cable)

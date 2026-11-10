@@ -19,6 +19,7 @@ struct TypeCIdentity {
 struct TypeCPartner {
     std::string type;
     std::optional<TypeCIdentity> identity;
+    std::string pdName;        // usb_power_delivery entry, e.g. "pd2"
     std::map<std::string, std::string> rawAttributes;
 };
 
@@ -56,6 +57,7 @@ struct TypeCPort {
     std::string pdRevision;
     std::string usbTypeCRev;
     std::optional<TypeCPowerSupply> powerSupply;
+    std::string pdName;        // the port's own usb_power_delivery entry
 
     bool hasPartner = false;
     std::optional<TypeCPartner> partner;
@@ -67,6 +69,7 @@ struct TypeCPort {
     bool isConnected() const;
     std::string currentDataRole() const;
     std::string currentPowerRole() const;
+    bool isSink() const { return currentPowerRole() == "sink"; }
 
     static std::vector<TypeCPort> enumerate();
 

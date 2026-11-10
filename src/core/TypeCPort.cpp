@@ -123,17 +123,17 @@ std::optional<TypeCPowerSupply> readUcsiPowerSupply(const std::string &portPath,
 
 std::optional<TypeCPort> TypeCPort::fromSysfs(const std::string &path, const std::string &name)
 {
-    if (!name.starts_with("port"))
+    // /sys/class/typec also lists portN-partner, portN-cable and
+    // portN-plugM; those are read below as children of their port.
+    static const std::regex numRe(R"(port(\d+))");
+    std::smatch match;
+    if (!std::regex_match(name, match, numRe))
         return std::nullopt;
 
     TypeCPort port;
     port.sysfsPath = path;
     port.portName = name;
-
-    static const std::regex numRe(R"(port(\d+))");
-    std::smatch match;
-    if (std::regex_match(name, match, numRe) && match.size() > 1)
-        port.portNumber = static_cast<int>(std::strtol(match[1].str().c_str(), nullptr, 10));
+    port.portNumber = static_cast<int>(std::strtol(match[1].str().c_str(), nullptr, 10));
 
     port.dataRole = SysfsReader::readAttribute(path + "/data_role");
     port.powerRole = SysfsReader::readAttribute(path + "/power_role");
@@ -143,6 +143,7 @@ std::optional<TypeCPort> TypeCPort::fromSysfs(const std::string &path, const std
     port.pdRevision = SysfsReader::readAttribute(path + "/usb_power_delivery_revision");
     port.usbTypeCRev = SysfsReader::readAttribute(path + "/usb_typec_revision");
     port.powerSupply = readUcsiPowerSupply(path, port.portNumber);
+    port.pdName = SysfsReader::readLinkBasename(path + "/usb_power_delivery");
 
     const std::string partnerPath = path + "-partner";
     if (SysfsReader::pathExists(partnerPath)) {
@@ -150,6 +151,7 @@ std::optional<TypeCPort> TypeCPort::fromSysfs(const std::string &path, const std
         TypeCPartner p;
         p.type = SysfsReader::readAttribute(partnerPath + "/type");
         p.identity = readIdentity(partnerPath);
+        p.pdName = SysfsReader::readLinkBasename(partnerPath + "/usb_power_delivery");
         p.rawAttributes = SysfsReader::readAllAttributes(partnerPath);
         port.partner = std::move(p);
     }

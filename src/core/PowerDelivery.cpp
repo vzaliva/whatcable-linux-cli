@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 
 namespace fs = std::filesystem;
@@ -55,43 +56,48 @@ std::vector<PowerDataObject> PowerDeliveryPort::parsePDOs(const std::string &cap
     if (!SysfsReader::pathExists(capsPath))
         return pdos;
 
-    std::error_code ec;
-    std::vector<std::string> entries;
-    for (const auto &e : fs::directory_iterator(fs::path(capsPath), fs::directory_options::skip_permission_denied, ec)) {
-        if (!ec && e.is_directory(ec))
-            entries.push_back(e.path().filename().string());
+    // Each PDO is a directory named "<position>:<kind>", e.g. "1:fixed_supply"
+    // or "4:programmable_supply". Other entries ("power", "uevent") are not PDOs.
+    struct Entry { int index; std::string name; std::string kind; };
+    std::vector<Entry> entries;
+    for (const auto &name : SysfsReader::listSubdirectories(capsPath)) {
+        const size_t colon = name.find(':');
+        if (colon == std::string::npos || colon == 0)
+            continue;
+        char *end = nullptr;
+        const long index = std::strtol(name.c_str(), &end, 10);
+        if (end != name.c_str() + colon || index <= 0)
+            continue;
+        entries.push_back({static_cast<int>(index), name, name.substr(colon + 1)});
     }
-    std::sort(entries.begin(), entries.end());
+    std::sort(entries.begin(), entries.end(),
+              [](const Entry &a, const Entry &b) { return a.index < b.index; });
 
     for (const auto &entry : entries) {
-        const std::string pdoPath = capsPath + "/" + entry;
+        const std::string pdoPath = capsPath + "/" + entry.name;
         PowerDataObject pdo;
-        size_t colon = entry.find_last_of(':');
-        std::string idxPart = colon == std::string::npos ? entry : entry.substr(colon + 1);
-        pdo.index = static_cast<int>(std::strtol(idxPart.c_str(), nullptr, 10));
+        pdo.index = entry.index;
 
-        std::string typeStr = SysfsReader::readAttribute(pdoPath + "/type");
-        if (typeStr == "fixed_supply")
+        if (entry.kind == "fixed_supply")
             pdo.type = PowerDataObject::FixedSupply;
-        else if (typeStr == "battery")
+        else if (entry.kind == "battery")
             pdo.type = PowerDataObject::Battery;
-        else if (typeStr == "variable_supply")
+        else if (entry.kind == "variable_supply")
             pdo.type = PowerDataObject::VariableSupply;
-        else if (typeStr.find("pps") != std::string::npos)
+        else if (entry.kind.find("programmable") != std::string::npos ||
+                 entry.kind.find("pps") != std::string::npos)
             pdo.type = PowerDataObject::PPS;
 
+        // Values carry units ("5000mV"); readIntAttribute stops at the suffix.
         auto voltage = SysfsReader::readIntAttribute(pdoPath + "/voltage");
+        if (!voltage)
+            voltage = SysfsReader::readIntAttribute(pdoPath + "/minimum_voltage");
         if (voltage)
             pdo.voltageMV = *voltage;
 
         auto maxVoltage = SysfsReader::readIntAttribute(pdoPath + "/maximum_voltage");
         if (maxVoltage)
             pdo.maxVoltageMV = *maxVoltage;
-        else if (!voltage) {
-            auto minVoltage = SysfsReader::readIntAttribute(pdoPath + "/minimum_voltage");
-            if (minVoltage)
-                pdo.voltageMV = *minVoltage;
-        }
 
         auto current = SysfsReader::readIntAttribute(pdoPath + "/maximum_current");
         if (!current)
@@ -100,15 +106,30 @@ std::vector<PowerDataObject> PowerDeliveryPort::parsePDOs(const std::string &cap
             pdo.currentMA = *current;
 
         auto power = SysfsReader::readIntAttribute(pdoPath + "/maximum_power");
+        const int topVoltageMV = pdo.maxVoltageMV > 0 ? pdo.maxVoltageMV : pdo.voltageMV;
         if (power)
             pdo.powerMW = *power;
-        else if (pdo.voltageMV > 0 && pdo.currentMA > 0)
-            pdo.powerMW = static_cast<int>(static_cast<int64_t>(pdo.voltageMV) * pdo.currentMA / 1000);
+        else if (topVoltageMV > 0 && pdo.currentMA > 0)
+            pdo.powerMW = static_cast<int>(static_cast<int64_t>(topVoltageMV) * pdo.currentMA / 1000);
 
         pdos.push_back(pdo);
     }
 
     return pdos;
+}
+
+void PowerDeliveryPort::markActiveSourcePdo(int negotiatedMV)
+{
+    // Fixed PDOs are in 50 mV units; allow a little slack for rounding.
+    constexpr int kToleranceMV = 100;
+    for (auto &pdo : sourceCapabilities) {
+        if (pdo.type == PowerDataObject::FixedSupply &&
+            std::abs(pdo.voltageMV - negotiatedMV) <= kToleranceMV) {
+            pdo.isActive = true;
+            activeSourcePdoIndex = pdo.index;
+            return;
+        }
+    }
 }
 
 std::optional<PowerDeliveryPort> PowerDeliveryPort::fromSysfs(const std::string &path, const std::string &name)
@@ -120,7 +141,15 @@ std::optional<PowerDeliveryPort> PowerDeliveryPort::fromSysfs(const std::string 
     port.sourceCapabilities = parsePDOs(path + "/source-capabilities");
     port.sinkCapabilities = parsePDOs(path + "/sink-capabilities");
 
+    // A PPS/AVS range's max V x max I can exceed the charger's rating (hence
+    // the "PPS power limited" flag), so rate the charger by its fixed PDOs
+    // whenever it has any.
+    const bool hasFixed = std::any_of(
+        port.sourceCapabilities.begin(), port.sourceCapabilities.end(),
+        [](const PowerDataObject &p) { return p.type == PowerDataObject::FixedSupply; });
     for (const auto &pdo : port.sourceCapabilities) {
+        if (hasFixed && pdo.type != PowerDataObject::FixedSupply)
+            continue;
         if (pdo.powerMW > port.maxSourcePowerMW)
             port.maxSourcePowerMW = pdo.powerMW;
     }

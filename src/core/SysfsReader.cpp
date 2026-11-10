@@ -92,6 +92,15 @@ std::map<std::string, std::string> SysfsReader::readAllAttributes(const std::str
     return attrs;
 }
 
+std::string SysfsReader::readLinkBasename(const std::string &path)
+{
+    std::error_code ec;
+    const fs::path target = fs::read_symlink(fs::path(path), ec);
+    if (ec)
+        return {};
+    return target.filename().string();
+}
+
 bool SysfsReader::pathExists(const std::string &path)
 {
     std::error_code ec;
