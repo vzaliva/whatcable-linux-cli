@@ -5,32 +5,38 @@
 
 namespace WhatCable {
 
-std::optional<ChargingDiagnostic> ChargingDiagnostic::evaluate(
-    const PowerDeliveryPort &pdPort,
-    const std::optional<CableInfo> &cable)
+const char *ChargingDiagnostic::bottleneckCode(Bottleneck b)
 {
-    if (pdPort.sourceCapabilities.empty())
+    switch (b) {
+    case NoCharger:          return "noCharger";
+    case ChargerLimit:       return "chargerLimit";
+    case CableLimit:         return "cableLimit";
+    case DeviceLimit:        return "deviceLimit";
+    case Fine:               return "fine";
+    case NegotiationUnknown: return "negotiationUnknown";
+    }
+    return "unknown";
+}
+
+std::optional<ChargingDiagnostic> ChargingDiagnostic::evaluate(
+    const PowerDeliveryPort &chargerCaps,
+    const std::optional<CableInfo> &cable,
+    std::optional<int> negotiatedMW)
+{
+    if (chargerCaps.sourceCapabilities.empty())
         return std::nullopt;
 
-    int chargerMaxW = pdPort.maxSourcePowerMW / 1000;
+    const int chargerMaxW = chargerCaps.maxSourcePowerMW / 1000;
     if (chargerMaxW <= 0)
         return std::nullopt;
 
     ChargingDiagnostic diag;
 
-    int activeW = 0;
-    for (const auto &pdo : pdPort.sourceCapabilities) {
-        if (pdo.isActive) {
-            activeW = pdo.powerMW / 1000;
-            break;
-        }
-    }
-    if (activeW <= 0 && !pdPort.sourceCapabilities.empty())
-        activeW = chargerMaxW;
-
-    int cableMaxW = 0;
-    if (cable && cable->maxWatts > 0)
-        cableMaxW = cable->maxWatts;
+    const int cableMaxW = (cable && cable->maxWatts > 0) ? cable->maxWatts : 0;
+    diag.chargerMaxW = chargerMaxW;
+    diag.cableMaxW = cableMaxW;
+    if (negotiatedMW && *negotiatedMW > 0)
+        diag.negotiatedW = (*negotiatedMW + 500) / 1000;
 
     char buf[256];
     if (cableMaxW > 0 && cableMaxW < chargerMaxW) {
@@ -41,22 +47,32 @@ std::optional<ChargingDiagnostic> ChargingDiagnostic::evaluate(
                       cableMaxW, chargerMaxW);
         diag.detail = buf;
         diag.isWarning = true;
-    } else if (activeW > 0 && activeW < chargerMaxW * 0.8) {
+        return diag;
+    }
+
+    // Never stand in the charger's maximum for the negotiated value: that
+    // would report "charging well" for a link we know nothing about.
+    if (!diag.negotiatedW) {
+        diag.bottleneck = NegotiationUnknown;
+        std::snprintf(buf, sizeof(buf), "Charger offers up to %dW", chargerMaxW);
+        diag.summary = buf;
+        diag.detail = "This system doesn't report the negotiated power";
+        return diag;
+    }
+
+    const int negotiatedW = *diag.negotiatedW;
+    if (negotiatedW < chargerMaxW * 0.8) {
         diag.bottleneck = DeviceLimit;
-        std::snprintf(buf, sizeof(buf), "Charging at %dW", activeW);
+        std::snprintf(buf, sizeof(buf), "Charging at %dW", negotiatedW);
         diag.summary = buf;
         std::snprintf(buf, sizeof(buf),
-                      "Charging at %dW (charger can do up to %dW)",
-                      activeW, chargerMaxW);
+                      "Laptop requested %dW; charger can deliver up to %dW",
+                      negotiatedW, chargerMaxW);
         diag.detail = buf;
-        diag.isWarning = false;
     } else {
         diag.bottleneck = Fine;
-        std::snprintf(buf, sizeof(buf), "Charging well at %dW",
-                      activeW > 0 ? activeW : chargerMaxW);
+        std::snprintf(buf, sizeof(buf), "Charging well at %dW", negotiatedW);
         diag.summary = buf;
-        diag.detail.clear();
-        diag.isWarning = false;
     }
 
     return diag;

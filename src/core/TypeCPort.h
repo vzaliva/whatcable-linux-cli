@@ -51,6 +51,11 @@ struct TypeCPowerSupply {
     std::string chargeType;
     std::string usbType;
     std::map<std::string, std::string> rawAttributes;
+
+    // Requested contract (voltage_now x current_now), not measured draw.
+    // nullopt unless online with positive values. UCSI reports "online"
+    // only while the port is sinking power.
+    std::optional<int> negotiatedMilliwatts() const;
 };
 
 struct TypeCPort {

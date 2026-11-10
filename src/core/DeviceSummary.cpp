@@ -36,14 +36,14 @@ std::string joinComma(const std::vector<std::string> &v)
 
 std::string powerContractLabel(const TypeCPowerSupply &psy)
 {
-    if (!psy.voltageNowUV || !psy.currentNowUA)
+    // Same source and rounding as the charging diagnostic, so they agree.
+    const auto milliwatts = psy.negotiatedMilliwatts();
+    if (!milliwatts)
         return {};
 
     const double volts = *psy.voltageNowUV / 1000000.0;
     const double amps = *psy.currentNowUA / 1000000.0;
-    const int watts = static_cast<int>(
-        (static_cast<int64_t>(*psy.voltageNowUV) * *psy.currentNowUA + 500000000000LL) /
-        1000000000000LL);
+    const int watts = (*milliwatts + 500) / 1000;
 
     char buf[128];
     std::snprintf(buf, sizeof(buf), "Negotiated power: %.1fV @ %.2fA — %dW",
@@ -242,16 +242,19 @@ DeviceSummary DeviceSummary::fromTypeCPort(
         }
     }
 
-    if (pd && !pd->sourceCapabilities.empty()) {
+    // Partner source PDOs make it a charger only while this port is sinking:
+    // a dual-role phone or power bank we are powering also advertises them.
+    if (port.isSink() && pd && !pd->sourceCapabilities.empty()) {
         int maxW = pd->maxSourcePowerMW / 1000;
         char buf[64];
         std::snprintf(buf, sizeof(buf), "Charger max: %dW", maxW);
         s.bullets.emplace_back(buf);
         s.status = Charging;
-    }
 
-    if (pd) {
-        auto diag = ChargingDiagnostic::evaluate(*pd, cableOpt);
+        std::optional<int> negotiatedMW;
+        if (port.powerSupply)
+            negotiatedMW = port.powerSupply->negotiatedMilliwatts();
+        auto diag = ChargingDiagnostic::evaluate(*pd, cableOpt, negotiatedMW);
         if (diag)
             s.chargingDiag = std::move(diag);
     }

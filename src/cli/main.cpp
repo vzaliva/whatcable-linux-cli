@@ -123,7 +123,9 @@ void printTextSummary(std::ostream &out, const DeviceManager &mgr, bool showRaw)
         }
 
         if (dev.powerDelivery && !dev.powerDelivery->sourceCapabilities.empty()) {
-            out << "  " << BOLD << "Charger profiles:" << RESET << '\n';
+            const bool isCharger = dev.typecPort && dev.typecPort->isSink();
+            out << "  " << BOLD << (isCharger ? "Charger profiles:" : "Partner source profiles:")
+                << RESET << '\n';
             for (const auto &pdo : dev.powerDelivery->sourceCapabilities) {
                 std::string marker = pdo.isActive ? std::string(" ◀ active") : std::string();
                 out << "    " << pdo.voltageLabel() << " @ " << pdo.currentLabel()

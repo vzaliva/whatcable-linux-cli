@@ -36,6 +36,16 @@ std::string TypeCPort::currentPowerRole() const
     return powerRole;
 }
 
+std::optional<int> TypeCPowerSupply::negotiatedMilliwatts() const
+{
+    if (!online || !voltageNowUV || !currentNowUA ||
+        *voltageNowUV <= 0 || *currentNowUA <= 0)
+        return std::nullopt;
+    // uV * uA = pW; / 1e9 -> mW, rounded.
+    return static_cast<int>(
+        (static_cast<int64_t>(*voltageNowUV) * *currentNowUA + 500000000LL) / 1000000000LL);
+}
+
 std::optional<TypeCIdentity> TypeCPort::readIdentity(const std::string &path)
 {
     const std::string idPath = path + "/identity";
