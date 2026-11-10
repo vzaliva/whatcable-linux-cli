@@ -87,6 +87,50 @@ std::string hexVidPid(uint16_t v)
     return buf;
 }
 
+std::string hexVdo(uint32_t v)
+{
+    char buf[16];
+    std::snprintf(buf, sizeof(buf), "0x%08x", v);
+    return buf;
+}
+
+std::string jsonOptInt(const std::optional<int> &v)
+{
+    return v ? std::to_string(*v) : std::string("null");
+}
+
+// "identity": {...} with the raw Discover Identity VDOs. The key line is
+// indented at `depth`; the caller handles the preceding comma.
+void appendIdentityJson(std::string &s, const TypeCIdentity &id, int depth)
+{
+    const auto hdr = decodeIDHeader(id.idHeader);
+    const std::pair<const char *, std::string> fields[] = {
+        {"vendorId", jsonQuoted(hexVidPid(id.vendorId))},
+        {"productId", jsonQuoted(hexVidPid(id.productId))},
+        {"productType", jsonQuoted(productTypeLabel(hdr.ufpProductType))},
+        {"idHeader", jsonQuoted(hexVdo(id.idHeader))},
+        {"certStat", jsonQuoted(hexVdo(id.certStat))},
+        {"product", jsonQuoted(hexVdo(id.product))},
+        {"productTypeVdo1", jsonQuoted(hexVdo(id.productTypeVdos[0]))},
+        {"productTypeVdo2", jsonQuoted(hexVdo(id.productTypeVdos[1]))},
+        {"productTypeVdo3", jsonQuoted(hexVdo(id.productTypeVdos[2]))},
+    };
+    jsonNlIndent(s, depth);
+    s += "\"identity\": {";
+    bool first = true;
+    for (const auto &f : fields) {
+        if (!first)
+            s += ',';
+        first = false;
+        jsonNlIndent(s, depth + 1);
+        s += '"';
+        s += f.first;
+        s += "\": " + f.second;
+    }
+    jsonNlIndent(s, depth);
+    s += '}';
+}
+
 void printTextSummary(std::ostream &out, const DeviceManager &mgr, bool showRaw)
 {
     const auto &devices = mgr.devices();
@@ -351,6 +395,27 @@ std::string deviceToJson(const DeviceSummary &dev, bool showRaw, int depth)
                 jsonNlIndent(s, d2);
                 s += std::string("\"connected\": ") + (tc.isConnected() ? "true" : "false");
             });
+            emitTc([&] {
+                jsonNlIndent(s, d2);
+                s += "\"pd\": " + jsonQuoted(tc.pdName);   // the port's own PD entry
+            });
+            if (tc.partner) {
+                const TypeCPartner &p = *tc.partner;
+                emitTc([&] {
+                    jsonNlIndent(s, d2);
+                    s += "\"partner\": {";
+                    jsonNlIndent(s, d3);
+                    s += "\"type\": " + jsonQuoted(p.type) + ',';
+                    jsonNlIndent(s, d3);
+                    s += "\"pd\": " + jsonQuoted(p.pdName);
+                    if (p.identity) {
+                        s += ',';
+                        appendIdentityJson(s, *p.identity, d3);
+                    }
+                    jsonNlIndent(s, d2);
+                    s += '}';
+                });
+            }
             if (tc.powerSupply) {
                 const TypeCPowerSupply &psy = *tc.powerSupply;
                 emitTc([&] {
@@ -401,12 +466,11 @@ std::string deviceToJson(const DeviceSummary &dev, bool showRaw, int depth)
                             s += "\"voltageMaxUV\": " + std::to_string(*psy.voltageMaxUV);
                         });
                     }
-                    if (psy.voltageNowUV && psy.currentNowUA) {
-                        const int64_t mw = static_cast<int64_t>(*psy.voltageNowUV) *
-                            *psy.currentNowUA / 1000000000LL;
+                    // Same helper as the text output and the charging verdict.
+                    if (const auto mw = psy.negotiatedMilliwatts()) {
                         emitPsy([&] {
                             jsonNlIndent(s, d3);
-                            s += "\"negotiatedPowerMW\": " + std::to_string(mw);
+                            s += "\"negotiatedPowerMW\": " + std::to_string(*mw);
                         });
                     }
                     emitPsy([&] {
@@ -472,6 +536,16 @@ std::string deviceToJson(const DeviceSummary &dev, bool showRaw, int depth)
             }
             emitC([&] {
                 jsonNlIndent(s, d2);
+                s += "\"plugType\": " + jsonQuoted(c.plugType);
+            });
+            if (c.ratedVbusVolts > 0) {
+                emitC([&] {
+                    jsonNlIndent(s, d2);
+                    s += "\"ratedVbusVolts\": " + std::to_string(c.ratedVbusVolts);
+                });
+            }
+            emitC([&] {
+                jsonNlIndent(s, d2);
                 s += "\"maxWatts\": " + std::to_string(c.maxWatts);
             });
             emitC([&] {
@@ -482,6 +556,8 @@ std::string deviceToJson(const DeviceSummary &dev, bool showRaw, int depth)
                 jsonNlIndent(s, d2);
                 s += "\"vendorName\": " + jsonQuoted(c.vendorName);
             });
+            if (c.identity)
+                emitC([&] { appendIdentityJson(s, *c.identity, d2); });
             jsonNlIndent(s, d1);
             s += '}';
         });
@@ -493,6 +569,12 @@ std::string deviceToJson(const DeviceSummary &dev, bool showRaw, int depth)
             jsonNlIndent(s, d1);
             s += "\"powerDelivery\": {";
             jsonNlIndent(s, d2);
+            s += "\"pd\": " + jsonQuoted(pd.name) + ',';   // the partner's PD entry
+            jsonNlIndent(s, d2);
+            // Partner source PDOs are a charger only while this port sinks.
+            s += std::string("\"isCharger\": ") +
+                 (dev.typecPort && dev.typecPort->isSink() ? "true" : "false") + ',';
+            jsonNlIndent(s, d2);
             s += "\"sourceCapabilities\": [";
             for (size_t i = 0; i < pd.sourceCapabilities.size(); ++i) {
                 if (i)
@@ -501,11 +583,19 @@ std::string deviceToJson(const DeviceSummary &dev, bool showRaw, int depth)
                 jsonNlIndent(s, d3);
                 s += '{';
                 jsonNlIndent(s, d4);
+                s += "\"index\": " + std::to_string(pdo.index);
+                s += ',';
+                jsonNlIndent(s, d4);
                 s += "\"type\": " + jsonQuoted(pdo.typeLabel());
                 s += ',';
                 jsonNlIndent(s, d4);
                 s += "\"voltageMV\": " + std::to_string(pdo.voltageMV);
                 s += ',';
+                if (pdo.maxVoltageMV > 0) {
+                    jsonNlIndent(s, d4);
+                    s += "\"maxVoltageMV\": " + std::to_string(pdo.maxVoltageMV);
+                    s += ',';
+                }
                 jsonNlIndent(s, d4);
                 s += "\"currentMA\": " + std::to_string(pdo.currentMA);
                 s += ',';
@@ -523,6 +613,9 @@ std::string deviceToJson(const DeviceSummary &dev, bool showRaw, int depth)
             s += ',';
             jsonNlIndent(s, d2);
             s += "\"maxPowerMW\": " + std::to_string(pd.maxSourcePowerMW);
+            s += ',';
+            jsonNlIndent(s, d2);
+            s += "\"activeIndex\": " + jsonOptInt(pd.activeSourcePdoIndex);
             jsonNlIndent(s, d1);
             s += '}';
         });
@@ -533,6 +626,16 @@ std::string deviceToJson(const DeviceSummary &dev, bool showRaw, int depth)
         emit([&] {
             jsonNlIndent(s, d1);
             s += "\"charging\": {";
+            jsonNlIndent(s, d2);
+            s += "\"bottleneck\": " +
+                 jsonQuoted(ChargingDiagnostic::bottleneckCode(diag.bottleneck)) + ',';
+            jsonNlIndent(s, d2);
+            s += "\"chargerMaxW\": " + std::to_string(diag.chargerMaxW) + ',';
+            jsonNlIndent(s, d2);
+            s += "\"cableMaxW\": " +
+                 jsonOptInt(diag.cableMaxW > 0 ? std::optional<int>(diag.cableMaxW) : std::nullopt) + ',';
+            jsonNlIndent(s, d2);
+            s += "\"negotiatedW\": " + jsonOptInt(diag.negotiatedW) + ',';
             jsonNlIndent(s, d2);
             s += "\"summary\": " + jsonQuoted(diag.summary);
             s += ',';

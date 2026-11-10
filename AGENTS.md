@@ -32,6 +32,12 @@ Two components share a single core library:
 - sysfs reads go through `SysfsReader` — never read `/sys/` directly with raw file I/O from call sites (implementation may use filesystem APIs inside `SysfsReader`).
 - Source files derived from the original Swift code must keep the attribution header: `// Derived from WhatCable by Darryl Morley (https://github.com/darrylmorley/whatcable)`
 - Handle missing sysfs paths gracefully — return empty/nullopt, never crash. Many systems lack `/sys/class/typec/` or `/sys/class/usb_power_delivery/`.
+- Keep `--json` in step with the text output. Any new or changed fact, verdict, or field must also be emitted by `deviceToJson()` in `src/cli/main.cpp`:
+  - Use camelCase keys.
+  - Add keys rather than renaming or removing them; scripts depend on them.
+  - Emit `null` for "not reported", not `0`.
+  - Pair each verdict with a stable machine code (as `charging.bottleneck` does) and the numbers behind it.
+  - Verify that both `--json` and `--json --raw` parse, e.g. `| python3 -m json.tool`.
 
 ## Build
 
