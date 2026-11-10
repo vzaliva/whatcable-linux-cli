@@ -36,7 +36,8 @@ struct DeviceSummary {
     static DeviceSummary fromTypeCPort(
         const TypeCPort &port,
         const std::optional<PowerDeliveryPort> &pd,
-        const std::optional<CableInfo> &cable);
+        const std::optional<CableInfo> &cable,
+        const std::optional<SystemBattery> &battery = std::nullopt);
 };
 
 } // namespace WhatCable

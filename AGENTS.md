@@ -62,6 +62,7 @@ cmake --build build
 | `src/core/PowerDelivery.h/cpp` | Parses PDO lists from `/sys/class/usb_power_delivery/` |
 | `src/core/DeviceSummary.h/cpp` | Generates headlines, subtitles, bullets per device |
 | `src/core/ChargingDiagnostic.h/cpp` | Identifies USB-C charging bottlenecks |
+| `src/core/Battery.h/cpp` | System battery status from `/sys/class/power_supply/` (charging wording) |
 | `src/core/DeviceManager.h/cpp` | Aggregates all sources, correlates data, owns refresh logic |
 | `src/core/UDevMonitor.h/cpp` | libudev monitor + fd for `poll()` |
 | `src/core/VendorDB.h/cpp` | USB VID → vendor name lookup |

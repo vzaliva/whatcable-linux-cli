@@ -17,6 +17,7 @@ void DeviceManager::refresh()
     m_usbDevices = UsbDevice::enumerate();
     m_typecPorts = TypeCPort::enumerate();
     m_pdPorts = PowerDeliveryPort::enumerate();
+    const auto battery = SystemBattery::read();
 
     for (const auto &tcPort : m_typecPorts) {
         // The partner's PD entry holds what the far end offers (a charger's
@@ -41,7 +42,7 @@ void DeviceManager::refresh()
         if (tcPort.cable)
             cable = CableInfo::fromTypeCCable(*tcPort.cable);
 
-        m_devices.push_back(DeviceSummary::fromTypeCPort(tcPort, pd, cable));
+        m_devices.push_back(DeviceSummary::fromTypeCPort(tcPort, pd, cable, battery));
     }
 
     for (const auto &dev : m_usbDevices) {

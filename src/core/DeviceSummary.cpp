@@ -139,7 +139,8 @@ DeviceSummary DeviceSummary::fromUsbDevice(const UsbDevice &dev)
 DeviceSummary DeviceSummary::fromTypeCPort(
     const TypeCPort &port,
     const std::optional<PowerDeliveryPort> &pd,
-    const std::optional<CableInfo> &cableOpt)
+    const std::optional<CableInfo> &cableOpt,
+    const std::optional<SystemBattery> &battery)
 {
     DeviceSummary s;
     s.category = TypeCPortCategory;
@@ -254,7 +255,7 @@ DeviceSummary DeviceSummary::fromTypeCPort(
         std::optional<int> negotiatedMW;
         if (port.powerSupply)
             negotiatedMW = port.powerSupply->negotiatedMilliwatts();
-        auto diag = ChargingDiagnostic::evaluate(*pd, cableOpt, negotiatedMW);
+        auto diag = ChargingDiagnostic::evaluate(*pd, cableOpt, negotiatedMW, battery);
         if (diag)
             s.chargingDiag = std::move(diag);
     }

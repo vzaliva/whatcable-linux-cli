@@ -21,7 +21,8 @@ const char *ChargingDiagnostic::bottleneckCode(Bottleneck b)
 std::optional<ChargingDiagnostic> ChargingDiagnostic::evaluate(
     const PowerDeliveryPort &chargerCaps,
     const std::optional<CableInfo> &cable,
-    std::optional<int> negotiatedMW)
+    std::optional<int> negotiatedMW,
+    const std::optional<SystemBattery> &battery)
 {
     if (chargerCaps.sourceCapabilities.empty())
         return std::nullopt;
@@ -35,6 +36,7 @@ std::optional<ChargingDiagnostic> ChargingDiagnostic::evaluate(
     const int cableMaxW = (cable && cable->maxWatts > 0) ? cable->maxWatts : 0;
     diag.chargerMaxW = chargerMaxW;
     diag.cableMaxW = cableMaxW;
+    diag.battery = battery;
     if (negotiatedMW && *negotiatedMW > 0)
         diag.negotiatedW = (*negotiatedMW + 500) / 1000;
 
@@ -73,6 +75,55 @@ std::optional<ChargingDiagnostic> ChargingDiagnostic::evaluate(
         diag.bottleneck = Fine;
         std::snprintf(buf, sizeof(buf), "Charging well at %dW", negotiatedW);
         diag.summary = buf;
+    }
+
+    // Power is flowing, but say "charging" only if the battery agrees.
+    using Status = SystemBattery::Status;
+    const Status status = battery ? battery->status : Status::Unknown;
+    const std::string contractDetail = diag.detail;
+    auto withContract = [&](const std::string &text) {
+        return contractDetail.empty() ? text : text + ". " + contractDetail;
+    };
+
+    switch (status) {
+    case Status::Full:
+        std::snprintf(buf, sizeof(buf), "Plugged in at %dW, battery full", negotiatedW);
+        diag.summary = buf;
+        break;
+    case Status::NotCharging:
+        std::snprintf(buf, sizeof(buf), "Plugged in at %dW, not charging", negotiatedW);
+        diag.summary = buf;
+        if (battery->capacityPercent && battery->chargeLimitPercent &&
+            *battery->chargeLimitPercent < 100 &&
+            *battery->capacityPercent >= *battery->chargeLimitPercent) {
+            std::snprintf(buf, sizeof(buf), "Battery at %d%%, held at the %d%% charge limit",
+                          *battery->capacityPercent, *battery->chargeLimitPercent);
+            diag.detail = withContract(buf);
+        } else {
+            diag.detail = withContract("Charging is paused by the system");
+        }
+        break;
+    case Status::Discharging:
+        diag.isWarning = true;
+        if (diag.bottleneck == Fine) {
+            // Already drawing (nearly) all the charger offers: it is too weak.
+            diag.bottleneck = ChargerLimit;
+            std::snprintf(buf, sizeof(buf), "Charger can't keep up at %dW: battery discharging",
+                          negotiatedW);
+            diag.summary = buf;
+            std::snprintf(buf, sizeof(buf),
+                          "The laptop uses more than the %dW this charger can deliver",
+                          chargerMaxW);
+            diag.detail = buf;
+        } else {
+            std::snprintf(buf, sizeof(buf), "Plugged in at %dW, but battery is discharging",
+                          negotiatedW);
+            diag.summary = buf;
+        }
+        break;
+    case Status::Charging:
+    case Status::Unknown:
+        break;
     }
 
     return diag;

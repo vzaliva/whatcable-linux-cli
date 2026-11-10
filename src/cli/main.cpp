@@ -685,6 +685,23 @@ std::string deviceToJson(const DeviceSummary &dev, bool showRaw, int depth)
             jsonNlIndent(s, d2);
             s += "\"negotiatedW\": " + jsonOptInt(diag.negotiatedW) + ',';
             jsonNlIndent(s, d2);
+            s += "\"battery\": ";
+            if (diag.battery) {
+                s += '{';
+                jsonNlIndent(s, d3);
+                s += "\"status\": " +
+                     jsonQuoted(SystemBattery::statusCode(diag.battery->status)) + ',';
+                jsonNlIndent(s, d3);
+                s += "\"capacityPercent\": " + jsonOptInt(diag.battery->capacityPercent) + ',';
+                jsonNlIndent(s, d3);
+                s += "\"chargeLimitPercent\": " + jsonOptInt(diag.battery->chargeLimitPercent);
+                jsonNlIndent(s, d2);
+                s += '}';
+            } else {
+                s += "null";
+            }
+            s += ',';
+            jsonNlIndent(s, d2);
             s += "\"summary\": " + jsonQuoted(diag.summary);
             s += ',';
             jsonNlIndent(s, d2);

@@ -9,6 +9,7 @@ add_library(whatcablecore STATIC
     UsbClassDB.cpp
     DeviceSummary.cpp
     ChargingDiagnostic.cpp
+    Battery.cpp
     UDevMonitor.cpp
     DeviceManager.cpp
 )
