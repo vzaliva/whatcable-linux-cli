@@ -20,6 +20,16 @@ struct Pdo {
     int currentMA = 0;
 };
 
+// A spec-valid active cable: Active Cable VDO 1 with USB4 Gen 3, 5 A,
+// 50 V, both ends active, latency 0001 (about 1 m), EPR capable, Type-C,
+// VDO version 1.3 ...
+inline constexpr uint32_t kActiveUsb4CableVdo1 =
+    3u | (2u << 5) | (3u << 9) | (3u << 11) | (1u << 13) | (1u << 17) | (2u << 18) | (3u << 21);
+// ... and its VDO 2: 70 C / 85 C, U3/CLd 0.5-1 mW, copper re-timer, USB4,
+// USB 3.2 and USB 2.0 supported (inverted bits clear), two lanes, Gen 2+.
+inline constexpr uint32_t kActiveUsb4CableVdo2 =
+    (70u << 24) | (85u << 16) | (3u << 12) | (1u << 9) | (1u << 3) | 1u;
+
 struct Identity {
     uint32_t idHeader = 0, certStat = 0, product = 0;
     uint32_t vdo1 = 0, vdo2 = 0, vdo3 = 0;
@@ -29,7 +39,8 @@ struct Identity {
 std::string addTypecPort(FakeSysfs &fs, int n, const std::string &powerRole,
                          const std::string &dataRole, const std::string &opMode);
 std::string addPartner(FakeSysfs &fs, int n, const Identity *identity = nullptr);
-std::string addCable(FakeSysfs &fs, int n, const std::string &type, const Identity &identity);
+std::string addCable(FakeSysfs &fs, int n, const std::string &type, const Identity &identity,
+                     const std::string &pdRevision = "3.0");
 // A usb_power_delivery entry inside `ownerDevice` (a /sys/devices path),
 // linked from /sys/class/usb_power_delivery/<name> and <ownerLink>.
 void addPd(FakeSysfs &fs, const std::string &name, const std::string &ownerDevice,
@@ -44,8 +55,9 @@ void addBattery(FakeSysfs &fs, const std::string &name, const std::string &statu
 //   port0: sinking from a 45 W charger (partner pd2, 5 fixed PDOs, UCSI
 //          contract 20 V x 2.25 A); the port's own pd0 offers 15 W.
 //   port1: sourcing to a dual-role phone (partner pd3 advertises 15 W) over
-//          an active 5 A / 50 V e-marked cable whose cert_stat would read
-//          as a passive cable if mistaken for the ID header.
+//          a spec-valid active USB4 5 A / 50 V e-marked cable whose
+//          cert_stat would read as a passive cable if mistaken for the ID
+//          header.
 //   /usr/share/hwdata/usb.ids: a few vendors (not Anker).
 //   BAT0 "Not charging" at 93% with an 80% limit; a mouse battery
 //   (scope Device) that is discharging; one USB device with binary

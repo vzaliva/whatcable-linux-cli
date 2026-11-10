@@ -146,6 +146,32 @@ std::string jsonOptInt(const std::optional<int> &v)
     return v ? std::to_string(*v) : std::string("null");
 }
 
+std::string jsonBool(bool v)
+{
+    return v ? "true" : "false";
+}
+
+// "key": { "field": value, ... } with values already JSON-encoded. The key
+// line is indented at `depth`; the caller handles the preceding comma.
+void appendObjectJson(std::string &s, const char *key,
+                      const std::vector<std::pair<const char *, std::string>> &fields, int depth)
+{
+    jsonNlIndent(s, depth);
+    s += '"';
+    s += key;
+    s += "\": {";
+    for (size_t i = 0; i < fields.size(); ++i) {
+        if (i)
+            s += ',';
+        jsonNlIndent(s, depth + 1);
+        s += '"';
+        s += fields[i].first;
+        s += "\": " + fields[i].second;
+    }
+    jsonNlIndent(s, depth);
+    s += '}';
+}
+
 // "identity": {...} with the raw Discover Identity VDOs. The key line is
 // indented at `depth`; the caller handles the preceding comma. isPartner
 // selects SOP (port partner) vs SOP' (cable) product-type meanings.
@@ -593,6 +619,10 @@ std::string deviceToJson(const DeviceSummary &dev, bool showRaw, int depth)
                 jsonNlIndent(s, d2);
                 s += "\"plugType\": " + jsonQuoted(c.plugType);
             });
+            emitC([&] {
+                jsonNlIndent(s, d2);
+                s += "\"pdRevision\": " + jsonQuoted(c.pdRevision);
+            });
             if (c.ratedVbusVolts > 0) {
                 emitC([&] {
                     jsonNlIndent(s, d2);
@@ -613,6 +643,54 @@ std::string deviceToJson(const DeviceSummary &dev, bool showRaw, int depth)
             });
             if (c.identity)
                 emitC([&] { appendIdentityJson(s, *c.identity, d2, false); });
+            emitC([&] {
+                jsonNlIndent(s, d2);
+                s += "\"certificationXid\": " +
+                     (c.certificationXid ? std::to_string(*c.certificationXid) : std::string("null"));
+            });
+            if (c.vdo) {
+                const CableVDO &v = *c.vdo;
+                const std::string latency = cableLatencyLabel(v);
+                const std::string termination = cableTerminationLabel(v);
+                std::vector<std::pair<const char *, std::string>> fields = {
+                    {"pd2Layout", jsonBool(v.pd2Layout)},
+                    {"speedEncoded", std::to_string(v.speedEncoded)},
+                    {"speedReserved", jsonBool(v.speedReserved)},
+                    {"maxVbusVoltageEncoded", std::to_string(v.maxVbusVoltageEncoded)},
+                    {"plug", jsonQuoted(cablePlugLabel(v.plug))},
+                    {"latencyEncoded", std::to_string(v.latencyEncoded)},
+                    {"latency", latency.empty() ? "null" : jsonQuoted(latency)},
+                    {"vdoVersionEncoded", std::to_string(v.vdoVersionEncoded)},
+                    {"terminationEncoded", std::to_string(v.terminationEncoded)},
+                    {"termination", termination.empty() ? "null" : jsonQuoted(termination)},
+                    {"eprCapable", jsonBool(v.eprCapable)},
+                };
+                if (v.isActive) {
+                    fields.emplace_back("vbusThroughCable", jsonBool(v.vbusThroughCable));
+                    fields.emplace_back("sopDoublePrimePresent", jsonBool(v.sopDoublePrimePresent));
+                }
+                emitC([&] { appendObjectJson(s, "vdo", fields, d2); });
+            }
+            if (c.activeVdo2) {
+                const ActiveCableVDO2 &a = *c.activeVdo2;
+                const std::vector<std::pair<const char *, std::string>> fields = {
+                    {"physicalConnection", jsonQuoted(a.optical ? "optical" : "copper")},
+                    {"activeElement", jsonQuoted(a.retimer ? "re-timer" : "re-driver")},
+                    {"opticallyIsolated", jsonBool(a.opticallyIsolated)},
+                    {"usb4Supported", jsonBool(a.usb4Supported)},
+                    {"usb4Asymmetric", jsonBool(a.usb4Asymmetric)},
+                    {"usb32Supported", jsonBool(a.usb32Supported)},
+                    {"usb2Supported", jsonBool(a.usb2Supported)},
+                    {"twoLanes", jsonBool(a.twoLanes)},
+                    {"gen2OrHigher", jsonBool(a.gen2OrHigher)},
+                    {"usb2HubHopsConsumed", std::to_string(a.usb2HubHopsConsumed)},
+                    {"maxOperatingTempC", a.maxOperatingTempC ? std::to_string(a.maxOperatingTempC) : "null"},
+                    {"shutdownTempC", a.shutdownTempC ? std::to_string(a.shutdownTempC) : "null"},
+                    {"u3CLdPower", jsonQuoted(u3CLdPowerLabel(a.u3CLdPower))},
+                    {"u3ToU0ThroughU3S", jsonBool(a.u3ToU0ThroughU3S)},
+                };
+                emitC([&] { appendObjectJson(s, "activeCable", fields, d2); });
+            }
             jsonNlIndent(s, d1);
             s += '}';
         });

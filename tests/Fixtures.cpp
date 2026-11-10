@@ -74,12 +74,14 @@ std::string addPartner(FakeSysfs &fs, int n, const Identity *identity)
     return dev;
 }
 
-std::string addCable(FakeSysfs &fs, int n, const std::string &type, const Identity &identity)
+std::string addCable(FakeSysfs &fs, int n, const std::string &type, const Identity &identity,
+                     const std::string &pdRevision)
 {
     const std::string name = "port" + std::to_string(n) + "-cable";
     const std::string dev = typecDevice(n) + "/" + name;
     fs.write(dev + "/type", type);
     fs.write(dev + "/plug_type", "type-c");
+    fs.write(dev + "/usb_power_delivery_revision", pdRevision);
     writeIdentity(fs, dev, identity);
     fs.link("/sys/class/typec/" + name, dev);
     return dev;
@@ -162,8 +164,8 @@ void buildDevLaptop(FakeSysfs &fs)
     cable.idHeader = (4u << 27) | 0x05AC;   // active cable, Apple VID
     cable.certStat = 3u << 27;              // would decode as "passive cable"
     cable.product = 0x12340100;             // PID 0x1234, bcdDevice 0x0100
-    cable.vdo1 = 0x642;                     // USB 3.2 Gen 2, 5 A, 50 V
-    cable.vdo2 = 0x1;
+    cable.vdo1 = kActiveUsb4CableVdo1;
+    cable.vdo2 = kActiveUsb4CableVdo2;
     addCable(fs, 1, "passive", cable);       // sysfs type disagrees with the header
 
     // A small usb.ids: Anker (0x291A) is deliberately missing, as in the

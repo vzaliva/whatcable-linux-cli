@@ -166,6 +166,7 @@ std::optional<TypeCPort> TypeCPort::fromSysfs(const std::string &path, const std
         TypeCCable c;
         c.type = SysfsReader::readAttribute(cablePath + "/type");
         c.plugType = SysfsReader::readAttribute(cablePath + "/plug_type");
+        c.pdRevision = SysfsReader::readAttribute(cablePath + "/usb_power_delivery_revision");
         c.identity = readIdentity(cablePath);
         c.rawAttributes = SysfsReader::readAllAttributes(cablePath);
         port.cable = std::move(c);

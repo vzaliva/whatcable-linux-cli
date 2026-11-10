@@ -9,11 +9,12 @@ using namespace wct;
 
 namespace {
 
-std::optional<CableInfo> cableOnPort0(const std::string &sysfsType, const Identity &id)
+std::optional<CableInfo> cableOnPort0(const std::string &sysfsType, const Identity &id,
+                                      const std::string &pdRevision = "3.0")
 {
     FakeSysfs fs;
     addTypecPort(fs, 0, "[source] sink", "[host] device", "usb_power_delivery");
-    addCable(fs, 0, sysfsType, id);
+    addCable(fs, 0, sysfsType, id, pdRevision);
     const auto ports = TypeCPort::enumerate();
     if (ports.size() != 1 || !ports[0].cable)
         return std::nullopt;
@@ -66,6 +67,73 @@ TEST_CASE(all_zero_identity_is_no_identity)
     CHECK(!cable->speed);
     CHECK_EQ(cable->maxWatts, 0);          // nothing fabricated from zeros
     CHECK_EQ(cable->vendorId, 0);
+}
+
+TEST_CASE(active_cable_full_decode)
+{
+    Identity id;
+    id.idHeader = (4u << 27) | 0x05AC;
+    id.certStat = 12345;
+    id.vdo1 = kActiveUsb4CableVdo1;
+    id.vdo2 = kActiveUsb4CableVdo2;
+    const auto cable = cableOnPort0("active", id);
+    REQUIRE(cable);
+    REQUIRE(cable->vdo);
+    REQUIRE(cable->activeVdo2);
+    CHECK(cable->activeVdo2->retimer);
+    CHECK(cable->speed == CableSpeed::USB4Gen3);
+    CHECK_EQ(cable->certificationXid, std::optional<uint32_t>(12345));
+}
+
+TEST_CASE(pd2_active_cable_has_no_vdo2)
+{
+    Identity id;
+    id.idHeader = (4u << 27) | 0x05AC;
+    id.vdo1 = (1u << 13) | (2u << 11) | (2u << 5) | (3u << 9);
+    id.vdo2 = kActiveUsb4CableVdo2;        // VDO 2 doesn't exist in PD 2.0
+    const auto cable = cableOnPort0("active", id, "2.0");
+    REQUIRE(cable);
+    CHECK_EQ(cable->pdRevision, "2.0");
+    CHECK(!cable->activeVdo2);
+    CHECK_EQ(cable->maxWatts, 100);
+}
+
+TEST_CASE(passive_cable_ignores_vdo2)
+{
+    Identity id;
+    id.idHeader = (3u << 27) | 0x05AC;
+    id.vdo1 = (1u << 13) | (1u << 5);
+    id.vdo2 = kActiveUsb4CableVdo2;        // must not be read for a passive cable
+    const auto cable = cableOnPort0("passive", id);
+    REQUIRE(cable);
+    CHECK(!cable->activeVdo2);
+    CHECK(!cable->certificationXid);       // cert_stat 0 = no XID
+}
+
+TEST_CASE(vconn_powered_device_is_not_decoded_as_a_cable)
+{
+    Identity id;
+    id.idHeader = (6u << 27) | 0x05AC;     // VPD
+    id.vdo1 = 0x642;                       // a VPD VDO; as a cable it would read 240 W
+    const auto cable = cableOnPort0("passive", id);
+    REQUIRE(cable);
+    CHECK(cable->isVpd);
+    CHECK(!cable->isPassive && !cable->isActive);
+    CHECK_EQ(cable->cableType, "vpd");
+    CHECK(!cable->vdo);
+    CHECK_EQ(cable->maxWatts, 0);
+}
+
+TEST_CASE(reserved_speed_is_not_reported_as_usb2)
+{
+    Identity id;
+    id.idHeader = (3u << 27) | 0x05AC;
+    id.vdo1 = (1u << 13) | 6u;             // speed 6 is reserved
+    const auto cable = cableOnPort0("", id);
+    REQUIRE(cable);
+    CHECK(!cable->speed);
+    REQUIRE(cable->vdo);
+    CHECK(cable->vdo->speedReserved);
 }
 
 TEST_CASE(partners_and_cables_are_not_listed_as_ports)

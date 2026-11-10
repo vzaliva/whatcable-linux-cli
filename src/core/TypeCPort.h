@@ -35,6 +35,7 @@ struct TypeCPartner {
 struct TypeCCable {
     std::string type;          // "active", "passive"
     std::string plugType;
+    std::string pdRevision;    // the e-marker's PD revision, e.g. "2.0", "3.0"
     std::optional<TypeCIdentity> identity;
     std::map<std::string, std::string> rawAttributes;
 };

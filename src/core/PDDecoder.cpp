@@ -1,6 +1,7 @@
 // Derived from WhatCable by Darryl Morley (https://github.com/darrylmorley/whatcable)
 // Port of PDVDO.swift — USB PD 3.x VDO bit-field decoding
 #include "PDDecoder.h"
+#include <cstdio>
 
 namespace WhatCable {
 
@@ -111,37 +112,79 @@ ProductType partnerProductType(const IDHeaderVDO &hdr)
     }
 }
 
-CableVDO decodeCableVDO(uint32_t vdo, bool isActive)
+CableVDO decodeCableVDO(uint32_t vdo, bool isActive, bool pd2Layout)
 {
     CableVDO cable;
     cable.isActive = isActive;
+    cable.pd2Layout = pd2Layout;
+    auto warn = [&cable](CableDecodeWarning::Kind kind, int value) {
+        cable.warnings.push_back({kind, value});
+    };
 
-    uint8_t speedBits = vdo & 0x7;
-    switch (speedBits) {
+    cable.speedEncoded = static_cast<int>(vdo & 0x7);
+    switch (cable.speedEncoded) {
     case 0: cable.speed = CableSpeed::USB20; break;
     case 1: cable.speed = CableSpeed::USB32Gen1; break;
     case 2: cable.speed = CableSpeed::USB32Gen2; break;
     case 3: cable.speed = CableSpeed::USB4Gen3; break;
     case 4: cable.speed = CableSpeed::USB4Gen4; break;
-    default: cable.speed = CableSpeed::USB20; break;
+    default:
+        cable.speed = CableSpeed::USB20;
+        cable.speedReserved = true;
+        warn(CableDecodeWarning::ReservedSpeed, cable.speedEncoded);
+        break;
     }
 
-    cable.vbusThroughCable = (vdo >> 4) & 1;
+    // Bits 4:3 are reserved in the passive layout; in the active layout
+    // bit 4 is "VBUS through cable" and bit 3 "SOP'' controller present".
+    cable.vbusThroughCable = isActive && ((vdo >> 4) & 1);
+    cable.sopDoublePrimePresent = (vdo >> 3) & 1;
 
-    uint8_t currentBits = (vdo >> 5) & 0x3;
+    const int currentBits = static_cast<int>((vdo >> 5) & 0x3);
     switch (currentBits) {
-    case 0: cable.currentRating = CableCurrent::USBDefault; break;
     case 1: cable.currentRating = CableCurrent::ThreeAmp; break;
     case 2: cable.currentRating = CableCurrent::FiveAmp; break;
     default: cable.currentRating = CableCurrent::USBDefault; break;
     }
+    // 00b is also Invalid in the spec, but real USB 2.0 cables emit it
+    // routinely, so only the reserved 11b is reported (as upstream does).
+    if (currentBits == 3)
+        warn(CableDecodeWarning::ReservedCurrent, currentBits);
 
-    uint8_t voltageBits = (vdo >> 9) & 0x3;
-    switch (voltageBits) {
-    case 0: cable.maxVbusVolts = 20; break;
-    case 1: cable.maxVbusVolts = 30; break;
-    case 2: cable.maxVbusVolts = 40; break;
-    case 3: cable.maxVbusVolts = 50; break;
+    // Max VBUS voltage: 11b = 50V. 01b (30V) and 10b (40V) are deprecated
+    // and mean 20V (USB PD R3.2): only a 50V-rated cable may carry EPR.
+    // PD 2.0 e-markers use bits 10:9 for SuperSpeed directionality and
+    // predate EPR, so they are 20V cables whatever those bits hold.
+    cable.maxVbusVoltageEncoded = static_cast<int>((vdo >> 9) & 0x3);
+    cable.maxVbusVolts = (!pd2Layout && cable.maxVbusVoltageEncoded == 3) ? 50 : 20;
+
+    cable.terminationEncoded = static_cast<int>((vdo >> 11) & 0x3);
+    // Passive: 00 / 01 valid. Active: 10 / 11 valid.
+    if (isActive ? cable.terminationEncoded < 2 : cable.terminationEncoded >= 2)
+        warn(CableDecodeWarning::InvalidTermination, cable.terminationEncoded);
+
+    // Latency: 0000 is Invalid; passive cables also reject 1001..1111,
+    // active cables accept 1001 / 1010 (optical lengths) and reject 1011+.
+    cable.latencyEncoded = static_cast<int>((vdo >> 13) & 0xF);
+    if (cable.latencyEncoded == 0 || cable.latencyEncoded >= (isActive ? 0xB : 0x9))
+        warn(CableDecodeWarning::ReservedLatency, cable.latencyEncoded);
+
+    cable.plug = static_cast<CablePlug>((vdo >> 18) & 0x3);
+
+    if (!pd2Layout) {
+        // Bits 23:21 and 17 are reserved in PD 2.0.
+        cable.eprCapable = (vdo >> 17) & 1;
+
+        // VDO version: passive cables only 000 (v1.0); active cables 000,
+        // 010 and 011 (v1.0 and v1.2 deprecated, v1.3).
+        cable.vdoVersionEncoded = static_cast<int>((vdo >> 21) & 0x7);
+        const int ver = cable.vdoVersionEncoded;
+        if (isActive ? !(ver == 0 || ver == 2 || ver == 3) : ver != 0)
+            warn(CableDecodeWarning::InvalidVdoVersion, ver);
+
+        // EPR needs a 50V-rated cable. Active cables' EPR semantics need VDO 2.
+        if (!isActive && cable.eprCapable && cable.maxVbusVoltageEncoded != 3)
+            warn(CableDecodeWarning::EprWithLowMaxVoltage, cable.maxVbusVoltageEncoded);
     }
 
     // USB PD never delivers above 48V (EPR fixed and AVS both top out
@@ -151,6 +194,81 @@ CableVDO decodeCableVDO(uint32_t vdo, bool isActive)
     cable.maxWatts = static_cast<int>(deliverableVolts * amps + 0.5);
 
     return cable;
+}
+
+ActiveCableVDO2 decodeActiveCableVDO2(uint32_t vdo)
+{
+    ActiveCableVDO2 v;
+    v.maxOperatingTempC = static_cast<int>((vdo >> 24) & 0xFF);
+    v.shutdownTempC = static_cast<int>((vdo >> 16) & 0xFF);
+    v.u3CLdPower = static_cast<U3CLdPower>((vdo >> 12) & 0x7);
+    v.u3ToU0ThroughU3S = (vdo >> 11) & 1;
+    v.optical = (vdo >> 10) & 1;
+    v.retimer = (vdo >> 9) & 1;
+    v.usb4Supported = !((vdo >> 8) & 1);    // inverted in the spec
+    v.usb2HubHopsConsumed = static_cast<int>((vdo >> 6) & 0x3);
+    v.usb2Supported = !((vdo >> 5) & 1);    // inverted
+    v.usb32Supported = !((vdo >> 4) & 1);   // inverted
+    v.twoLanes = (vdo >> 3) & 1;
+    v.opticallyIsolated = (vdo >> 2) & 1;
+    v.usb4Asymmetric = (vdo >> 1) & 1;
+    v.gen2OrHigher = vdo & 1;
+    return v;
+}
+
+std::string cablePlugLabel(CablePlug plug)
+{
+    switch (plug) {
+    case CablePlug::TypeA:   return "Type-A";
+    case CablePlug::TypeB:   return "Type-B";
+    case CablePlug::TypeC:   return "Type-C";
+    case CablePlug::Captive: return "captive";
+    }
+    return "Type-C";
+}
+
+std::string cableLatencyLabel(const CableVDO &cable)
+{
+    const int e = cable.latencyEncoded;
+    char buf[64];
+    // Roughly 10 ns per metre of copper.
+    if (e >= 1 && e <= 7) {
+        std::snprintf(buf, sizeof(buf), "up to %d ns (about %d m)", e * 10, e);
+        return buf;
+    }
+    if (e == 8)
+        return "over 70 ns (over 7 m)";
+    if (cable.isActive && e == 9)
+        return "about 1000 ns (optical)";
+    if (cable.isActive && e == 10)
+        return "about 2000 ns (optical)";
+    return {};
+}
+
+std::string cableTerminationLabel(const CableVDO &cable)
+{
+    switch (cable.terminationEncoded) {
+    case 0: return cable.isActive ? std::string() : "VCONN not required";
+    case 1: return cable.isActive ? std::string() : "VCONN required";
+    case 2: return cable.isActive ? "one end active" : std::string();
+    case 3: return cable.isActive ? "both ends active" : std::string();
+    }
+    return {};
+}
+
+std::string u3CLdPowerLabel(U3CLdPower power)
+{
+    switch (power) {
+    case U3CLdPower::Over10mW:      return "> 10 mW";
+    case U3CLdPower::From5To10mW:   return "5-10 mW";
+    case U3CLdPower::From1To5mW:    return "1-5 mW";
+    case U3CLdPower::From05To1mW:   return "0.5-1 mW";
+    case U3CLdPower::From02To05mW:  return "0.2-0.5 mW";
+    case U3CLdPower::From50To200uW: return "50-200 uW";
+    case U3CLdPower::Under50uW:     return "< 50 uW";
+    case U3CLdPower::Reserved:      return "reserved";
+    }
+    return "reserved";
 }
 
 } // namespace WhatCable

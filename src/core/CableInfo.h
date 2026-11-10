@@ -7,23 +7,32 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace WhatCable {
 
 struct CableInfo {
     bool isActive = false;
     bool isPassive = false;
-    std::string cableType;           // resolved: "active", "passive", or sysfs value
+    // A VCONN-powered device answers on the cable channel (SOP') but is not
+    // a cable: its VDOs are not decoded as cable VDOs.
+    bool isVpd = false;
+    std::string cableType;           // resolved: "active", "passive", "vpd", or sysfs value
     std::string plugType;
+    std::string pdRevision;          // the e-marker's PD revision ("" if unknown)
 
-    std::optional<CableSpeed> speed;
+    std::optional<CableSpeed> speed; // nullopt if not read or a reserved encoding
     std::optional<CableCurrent> currentRating;
-    int ratedVbusVolts = 0;          // from the Cable VDO (up to 50V); 0 if not read
+    int ratedVbusVolts = 0;          // 20 or 50 from the Cable VDO; 0 if not read
     int maxWatts = 0;                // deliverable (voltage capped at 48V)
 
     uint16_t vendorId = 0;
     std::string vendorName;
     std::optional<TypeCIdentity> identity;   // raw Discover Identity VDOs
+
+    std::optional<CableVDO> vdo;              // decoded Cable VDO 1
+    std::optional<ActiveCableVDO2> activeVdo2;   // active cables only
+    std::optional<uint32_t> certificationXid; // USB-IF XID from cert_stat, if non-zero
 
     std::map<std::string, std::string> rawAttributes;
 

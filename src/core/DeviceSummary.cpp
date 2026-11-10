@@ -217,10 +217,15 @@ DeviceSummary DeviceSummary::fromTypeCPort(
 
     if (cableOpt) {
         const auto &c = *cableOpt;
+        if (c.isVpd)
+            s.bullets.emplace_back("VCONN-powered device on the cable channel (not a cable)");
         if (c.speed) {
             char buf[160];
             std::snprintf(buf, sizeof(buf), "Cable speed: %s", cableSpeedLabel(*c.speed).c_str());
             s.bullets.emplace_back(buf);
+        } else if (c.vdo && c.vdo->speedReserved) {
+            s.bullets.push_back("Cable speed: reserved value (" +
+                                std::to_string(c.vdo->speedEncoded) + ")");
         }
         if (c.currentRating) {
             char buf[160];
@@ -232,15 +237,44 @@ DeviceSummary DeviceSummary::fromTypeCPort(
             std::snprintf(buf, sizeof(buf), "Cable max power: %dW", c.maxWatts);
             s.bullets.emplace_back(buf);
         }
+        if (c.vdo) {
+            const std::string latency = cableLatencyLabel(*c.vdo);
+            if (!latency.empty())
+                s.bullets.push_back("Cable latency: " + latency);
+            if (c.vdo->eprCapable && c.vdo->maxVbusVolts == 50)
+                s.bullets.emplace_back("EPR capable (up to 48V)");
+        }
         if (c.isActive)
             s.bullets.emplace_back("Active cable");
         else if (c.isPassive)
             s.bullets.emplace_back("Passive cable");
+        if (c.activeVdo2) {
+            const auto &a = *c.activeVdo2;
+            std::string electronics = std::string("Active electronics: ") +
+                (a.optical ? "optical" : "copper") + ", " + (a.retimer ? "re-timer" : "re-driver");
+            if (a.optical && a.opticallyIsolated)
+                electronics += ", optically isolated";
+            s.bullets.push_back(electronics);
+
+            std::vector<std::string> protocols;
+            if (a.usb4Supported)
+                protocols.emplace_back("USB4");
+            if (a.usb32Supported)
+                protocols.push_back(std::string("USB 3.2 ") + (a.gen2OrHigher ? "Gen 2+" : "Gen 1") +
+                                    (a.twoLanes ? " x2" : ""));
+            if (a.usb2Supported)
+                protocols.emplace_back("USB 2.0");
+            if (!protocols.empty())
+                s.bullets.push_back("Cable data support: " + joinComma(protocols));
+        }
         if (!c.vendorName.empty() && !startsWithHexVid(c.vendorName)) {
             char buf[160];
             std::snprintf(buf, sizeof(buf), "Cable vendor: %s", c.vendorName.c_str());
             s.bullets.emplace_back(buf);
         }
+        if (c.certificationXid)
+            s.bullets.push_back("USB-IF certification ID (XID): " +
+                                std::to_string(*c.certificationXid));
     }
 
     // Partner source PDOs make it a charger only while this port is sinking:

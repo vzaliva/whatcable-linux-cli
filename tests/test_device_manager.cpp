@@ -93,6 +93,13 @@ TEST_CASE(sourcing_port_is_not_a_charger)
     CHECK_EQ(port1->cable->maxWatts, 240);
     CHECK(hasBullet(*port1, "Active cable"));
     CHECK(hasBullet(*port1, "Cable max power: 240W"));
+    CHECK(hasBullet(*port1, "Cable speed: USB4 Gen 3 (20/40 Gbps)"));
+    CHECK(hasBullet(*port1, "Cable latency: up to 10 ns (about 1 m)"));
+    CHECK(hasBullet(*port1, "EPR capable (up to 48V)"));
+    CHECK(hasBullet(*port1, "Active electronics: copper, re-timer"));
+    CHECK(hasBullet(*port1, "Cable data support: USB4, USB 3.2 Gen 2+ x2, USB 2.0"));
+    CHECK(hasBullet(*port1, "Cable vendor: Apple, Inc."));
+    CHECK(hasBullet(*port1, "USB-IF certification ID (XID): 402653184"));
 }
 
 TEST_CASE(usb_device_vendor_from_usb_ids)
