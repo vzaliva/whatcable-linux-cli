@@ -30,7 +30,7 @@ static SystemBattery::Status parseStatus(const std::string &s)
 
 std::optional<SystemBattery> SystemBattery::read()
 {
-    const std::string base = kPowerSupplyPath;
+    const std::string base = SysfsReader::sysPath(kPowerSupplyPath);
     std::optional<SystemBattery> result;
     bool anyCharging = false, anyDischarging = false, anyNotCharging = false;
     bool allFull = true;

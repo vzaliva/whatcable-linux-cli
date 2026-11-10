@@ -189,11 +189,12 @@ std::optional<PowerDeliveryPort> PowerDeliveryPort::fromSysfs(const std::string 
 std::vector<PowerDeliveryPort> PowerDeliveryPort::enumerate()
 {
     std::vector<PowerDeliveryPort> ports;
-    if (!SysfsReader::pathExists(kPdPath))
+    const std::string pdRoot = SysfsReader::sysPath(kPdPath);
+    if (!SysfsReader::pathExists(pdRoot))
         return ports;
 
     std::error_code ec;
-    const fs::path base(kPdPath);
+    const fs::path base(pdRoot);
     std::vector<std::string> entries;
     for (const auto &e : fs::directory_iterator(base, fs::directory_options::skip_permission_denied, ec)) {
         if (!ec && e.is_directory(ec))

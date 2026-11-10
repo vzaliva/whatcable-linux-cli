@@ -48,9 +48,27 @@ cmake --build build
 
 ## Testing
 
+- Run the test suite: `ctest --test-dir build --output-on-failure`
+  - `core` runs `build/tests/whatcable-tests`, a STL-only runner, over
+    fake sysfs trees. Pass test names to run a subset; `--list` lists
+    them.
+  - `cli_text` and `cli_json` run the CLI on the dev-laptop fixture
+    (`tests/Fixtures.cpp`). `cli_json` validates `--json` and
+    `--json --raw` with `tests/check_cli_json.py`, and is skipped if
+    Python 3 is missing.
+- Add or extend a test with every behaviour change:
+  - Build sysfs inputs with `wct::FakeSysfs` and the helpers in
+    `tests/Fixtures.h`. Lay them out as the kernel does: devices under
+    `/sys/devices`, `/sys/class` entries as symlinks.
+  - New output must be checked in `check_cli_json.py` too.
+- Every top-level sysfs path must go through `SysfsReader::sysPath()`,
+  so tests (and `WHATCABLE_SYSFS_ROOT`) can redirect it.
 - Run the CLI: `./build/src/cli/whatcable-linux`
 - JSON output: `./build/src/cli/whatcable-linux --json`
 - Watch mode: `./build/src/cli/whatcable-linux --watch`
+- Replay a captured or fake tree:
+  `WHATCABLE_SYSFS_ROOT=/path/to/snapshot ./build/src/cli/whatcable-linux`
+  reads `<dir>/sys/...` instead of `/sys/...`.
 
 ## Key Files to Know
 

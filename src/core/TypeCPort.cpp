@@ -103,7 +103,7 @@ std::optional<TypeCPowerSupply> readUcsiPowerSupply(const std::string &portPath,
     if (controller.empty())
         return std::nullopt;
 
-    const std::string psyPath = "/sys/class/power_supply/ucsi-source-psy-" +
+    const std::string psyPath = SysfsReader::sysPath("/sys/class/power_supply/ucsi-source-psy-") +
         controller + std::to_string(portNumber + 1);
     if (!SysfsReader::pathExists(psyPath))
         return std::nullopt;
@@ -179,11 +179,12 @@ std::optional<TypeCPort> TypeCPort::fromSysfs(const std::string &path, const std
 std::vector<TypeCPort> TypeCPort::enumerate()
 {
     std::vector<TypeCPort> ports;
-    if (!SysfsReader::pathExists(kTypecPath))
+    const std::string typecRoot = SysfsReader::sysPath(kTypecPath);
+    if (!SysfsReader::pathExists(typecRoot))
         return ports;
 
     std::error_code ec;
-    const fs::path base(kTypecPath);
+    const fs::path base(typecRoot);
     std::vector<std::string> entries;
     for (const auto &e : fs::directory_iterator(base, fs::directory_options::skip_permission_denied, ec)) {
         if (!ec && e.is_directory(ec))

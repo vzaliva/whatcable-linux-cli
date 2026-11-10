@@ -21,7 +21,32 @@ std::string trim(std::string s)
     return s;
 }
 
+std::string &rootStorage()
+{
+    static std::string root;
+    return root;
+}
+
 } // namespace
+
+void SysfsReader::setRoot(std::string root)
+{
+    while (root.size() > 1 && root.back() == '/')
+        root.pop_back();
+    if (root == "/")
+        root.clear();
+    rootStorage() = std::move(root);
+}
+
+const std::string &SysfsReader::root()
+{
+    return rootStorage();
+}
+
+std::string SysfsReader::sysPath(std::string_view absolutePath)
+{
+    return rootStorage() + std::string(absolutePath);
+}
 
 std::string SysfsReader::readAttribute(const std::string &path)
 {

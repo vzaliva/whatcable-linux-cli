@@ -173,7 +173,7 @@ std::vector<UsbDevice> UsbDevice::enumerate()
 {
     std::vector<UsbDevice> devices;
     std::error_code ec;
-    const fs::path base(kUsbDevicesPath);
+    const fs::path base(SysfsReader::sysPath(kUsbDevicesPath));
     if (!fs::is_directory(base, ec))
         return devices;
 

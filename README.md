@@ -48,10 +48,11 @@ Build and optionally install:
 ```bash
 cmake -B build -DCMAKE_INSTALL_PREFIX=/usr
 cmake --build build
+ctest --test-dir build       # optional: run the test suite
 sudo cmake --install build   # optional
 ```
 
-The `whatcable-linux` binary is `build/src/cli/whatcable-linux` if you skip install.
+The `whatcable-linux` binary is `build/src/cli/whatcable-linux` if you skip install. Configure with `-DBUILD_TESTING=OFF` to skip building the tests.
 
 ### Usage
 

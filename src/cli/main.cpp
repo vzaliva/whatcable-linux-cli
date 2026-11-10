@@ -4,12 +4,14 @@
 #include "DeviceManager.h"
 #include "UsbClassDB.h"
 #include "PDDecoder.h"
+#include "SysfsReader.h"
 
 #include <atomic>
 #include <chrono>
 #include <cerrno>
 #include <csignal>
 #include <cstdio>
+#include <cstdlib>
 #include <getopt.h>
 #include <iostream>
 #include <map>
@@ -813,7 +815,10 @@ void usage(FILE *fp, const char *argv0)
                  "  --version    Show version\n"
                  "  --json       Structured JSON output\n"
                  "  --watch      Stream updates as devices change\n"
-                 "  --raw        Include raw sysfs attributes\n",
+                 "  --raw        Include raw sysfs attributes\n"
+                 "\n"
+                 "Environment:\n"
+                 "  WHATCABLE_SYSFS_ROOT   Read <dir>/sys/... instead of /sys/...\n",
                  argv0);
 }
 
@@ -861,6 +866,11 @@ int main(int argc, char *argv[])
             return 2;
         }
     }
+
+    // Read a copied or fake sysfs tree instead of the live one (tests,
+    // replaying a bug report's snapshot).
+    if (const char *root = std::getenv("WHATCABLE_SYSFS_ROOT"); root && *root)
+        SysfsReader::setRoot(root);
 
     DeviceManager mgr;
 

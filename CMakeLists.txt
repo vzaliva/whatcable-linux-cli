@@ -9,3 +9,9 @@ pkg_check_modules(UDEV REQUIRED libudev)
 
 add_subdirectory(src/core)
 add_subdirectory(src/cli)
+
+option(BUILD_TESTING "Build the test suite (run with ctest)" ON)
+if(BUILD_TESTING)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
