@@ -818,7 +818,8 @@ void usage(FILE *fp, const char *argv0)
                  "  --raw        Include raw sysfs attributes\n"
                  "\n"
                  "Environment:\n"
-                 "  WHATCABLE_SYSFS_ROOT   Read <dir>/sys/... instead of /sys/...\n",
+                 "  WHATCABLE_SYSFS_ROOT   Read <dir>/sys/... (and <dir>/usr/share/.../usb.ids)\n"
+                 "                         instead of the live system\n",
                  argv0);
 }
 

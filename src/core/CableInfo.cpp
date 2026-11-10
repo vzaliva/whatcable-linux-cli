@@ -16,7 +16,7 @@ std::optional<CableInfo> CableInfo::fromTypeCCable(const TypeCCable &cable)
     if (cable.identity) {
         const auto &id = *cable.identity;
         info.vendorId = id.vendorId;
-        info.vendorName = VendorDB::lookup(id.vendorId);
+        info.vendorName = VendorDB::lookupPd(id.vendorId);
 
         // SOP' ID header carries the cable type in the UFP product-type
         // field. Only override the sysfs "type" when it says so explicitly.

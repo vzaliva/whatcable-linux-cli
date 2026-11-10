@@ -80,7 +80,7 @@ TEST_CASE(sourcing_port_is_not_a_charger)
 
     const DeviceSummary *port1 = find(mgr.devices(), "USB-C Port 1");
     REQUIRE(port1);
-    CHECK_EQ(port1->subtitle, "Google — USB Peripheral");
+    CHECK_EQ(port1->subtitle, "Google Inc. — USB Peripheral");   // from the fixture's usb.ids
     CHECK(port1->status != DeviceSummary::Charging);
     CHECK(!port1->chargingDiag);
     CHECK(!hasBulletPrefix(*port1, "Charger max"));
@@ -93,4 +93,15 @@ TEST_CASE(sourcing_port_is_not_a_charger)
     CHECK_EQ(port1->cable->maxWatts, 240);
     CHECK(hasBullet(*port1, "Active cable"));
     CHECK(hasBullet(*port1, "Cable max power: 240W"));
+}
+
+TEST_CASE(usb_device_vendor_from_usb_ids)
+{
+    FakeSysfs fs;
+    buildDevLaptop(fs);
+    DeviceManager mgr;
+    mgr.refresh();
+    const DeviceSummary *receiver = find(mgr.devices(), "USB Receiver");
+    REQUIRE(receiver);
+    CHECK(receiver->subtitle.rfind("Logitech, Inc.", 0) == 0);
 }

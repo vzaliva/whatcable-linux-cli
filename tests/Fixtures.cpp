@@ -166,6 +166,17 @@ void buildDevLaptop(FakeSysfs &fs)
     cable.vdo2 = 0x1;
     addCable(fs, 1, "passive", cable);       // sysfs type disagrees with the header
 
+    // A small usb.ids: Anker (0x291A) is deliberately missing, as in the
+    // real file, so it comes from the built-in fallback table.
+    fs.writeBytes("/usr/share/hwdata/usb.ids",
+                  "# test usb.ids\n"
+                  "046d  Logitech, Inc.\n"
+                  "\tc52b  Unifying Receiver\n"
+                  "05ac  Apple, Inc.\n"
+                  "18d1  Google Inc.\n"
+                  "C 00  (Defined at Interface level)\n"
+                  "ffff  not a vendor (class section)\n");
+
     fs.write("/sys/devices/ac/AC/type", "Mains");
     fs.link("/sys/class/power_supply/AC", "/sys/devices/ac/AC");
     addBattery(fs, "BAT0", "Not charging", 93, 80);

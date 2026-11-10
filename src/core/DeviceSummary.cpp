@@ -169,7 +169,7 @@ DeviceSummary DeviceSummary::fromTypeCPort(
         if (port.partner->identity) {
             auto hdr = decodeIDHeader(port.partner->identity->idHeader);
             std::string productLabel = productTypeLabel(partnerProductType(hdr));
-            std::string vendorLabel = VendorDB::lookup(hdr.vendorId);
+            std::string vendorLabel = VendorDB::lookupPd(hdr.vendorId);
             bool hasVendor = !startsWithHexVid(vendorLabel);
             s.subtitle = hasVendor ? vendorLabel + " — " + productLabel : productLabel;
         } else {

@@ -7,6 +7,7 @@ add_executable(whatcable-tests
     test_power_delivery.cpp
     test_charging.cpp
     test_device_manager.cpp
+    test_vendor_db.cpp
 )
 target_link_libraries(whatcable-tests PRIVATE whatcablecore)
 

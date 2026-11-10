@@ -83,12 +83,19 @@ cmake --build build
 | `src/core/Battery.h/cpp` | System battery status from `/sys/class/power_supply/` (charging wording) |
 | `src/core/DeviceManager.h/cpp` | Aggregates all sources, correlates data, owns refresh logic |
 | `src/core/UDevMonitor.h/cpp` | libudev monitor + fd for `poll()` |
-| `src/core/VendorDB.h/cpp` | USB VID → vendor name lookup |
+| `src/core/VendorDB.h/cpp` | USB VID → vendor name lookup (`usb.ids`, then a built-in fallback) |
 | `src/core/UsbClassDB.h/cpp` | USB class code → human name |
 
 ## Adding New Vendors
 
-Add entries to the `kVendors` map in `src/core/VendorDB.cpp`. Format: `{0xVID, "Vendor Name"}`.
+Vendor names come from the system `usb.ids` (hwdata or usbutils), read
+under `SysfsReader::root()`. Missing vendors belong upstream in `usb.ids`.
+
+The `kVendors` map in `src/core/VendorDB.cpp` is only a fallback, for
+systems without `usb.ids` and for IDs it lacks (e.g. `0x291A` Anker). Add
+an entry (`{0xVID, "Vendor Name"}`) only in that case, and check the ID
+against `usb.ids` or the USB-IF list first: hand-curated names drift into
+wrong ones.
 
 ## Adding New USB Class Codes
 

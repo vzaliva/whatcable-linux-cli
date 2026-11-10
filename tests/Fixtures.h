@@ -46,6 +46,7 @@ void addBattery(FakeSysfs &fs, const std::string &name, const std::string &statu
 //   port1: sourcing to a dual-role phone (partner pd3 advertises 15 W) over
 //          an active 5 A / 50 V e-marked cable whose cert_stat would read
 //          as a passive cable if mistaken for the ID header.
+//   /usr/share/hwdata/usb.ids: a few vendors (not Anker).
 //   BAT0 "Not charging" at 93% with an 80% limit; a mouse battery
 //   (scope Device) that is discharging; one USB device with binary
 //   bos_descriptors.

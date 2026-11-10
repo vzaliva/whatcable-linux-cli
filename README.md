@@ -84,7 +84,7 @@ Cable speed and power decoding follow the USB Power Delivery 3.x spec, ported fr
 - **USB-C/PD data availability varies by hardware.** The Type-C connector class and USB PD sysfs interfaces depend on the kernel driver (UCSI, TCPM, platform-specific). Some systems expose full PD negotiation data; others expose only basic port info or nothing at all.
 - **Cable e-marker info only appears for cables that carry one.** Same as the original — most USB-C cables under 60W are unmarked.
 - **WhatCable trusts the e-marker.** Counterfeit or mis-flashed cables can lie about their capabilities.
-- **Vendor name lookup is not exhaustive.** Common vendors are recognized; others show the hex VID.
+- **Vendor names come from the system `usb.ids`** (the `hwdata` or `usbutils` package), with a small built-in list as fallback. Vendors missing from both show the hex VID. A cable's e-marker usually carries the VID of the chip maker, not the cable brand.
 
 ## Credits
 
