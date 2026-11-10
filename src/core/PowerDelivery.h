@@ -42,9 +42,12 @@ struct PowerDeliveryPort {
 
     std::map<std::string, std::string> rawAttributes;
 
-    // Mark the source PDO matching a negotiated voltage as active. Only fixed
-    // PDOs are matched: a voltage can't identify a PPS/AVS contract.
-    void markActiveSourcePdo(int negotiatedMV);
+    // Mark the source PDO behind the current contract as active.
+    // Fixed contract: the fixed PDO at negotiatedMV. PPS contract
+    // (ppsContract, e.g. UCSI usb_type "[PD_PPS]"): the only PPS PDO, or
+    // with several, the one whose range contains negotiatedMV; fixed PDOs
+    // are never marked for a PPS contract. Nothing is marked if ambiguous.
+    void markActiveSourcePdo(int negotiatedMV, bool ppsContract = false);
 
     static std::vector<PowerDeliveryPort> enumerate();
 

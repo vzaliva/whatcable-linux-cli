@@ -56,6 +56,10 @@ struct TypeCPowerSupply {
     // nullopt unless online with positive values. UCSI reports "online"
     // only while the port is sinking power.
     std::optional<int> negotiatedMilliwatts() const;
+
+    // The bracketed (active) entry of usb_type, e.g. "PD_PPS" from
+    // "C PD [PD_PPS]"; empty if none is marked.
+    std::string selectedUsbType() const;
 };
 
 struct TypeCPort {

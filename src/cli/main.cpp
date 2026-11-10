@@ -529,6 +529,11 @@ std::string deviceToJson(const DeviceSummary &dev, bool showRaw, int depth)
                         jsonNlIndent(s, d3);
                         s += "\"usbType\": " + jsonQuoted(psy.usbType);
                     });
+                    emitPsy([&] {
+                        jsonNlIndent(s, d3);
+                        // Active contract type, e.g. "PD" or "PD_PPS"; "" if none.
+                        s += "\"selectedUsbType\": " + jsonQuoted(psy.selectedUsbType());
+                    });
                     jsonNlIndent(s, d2);
                     s += '}';
                 });

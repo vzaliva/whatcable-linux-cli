@@ -118,17 +118,41 @@ std::vector<PowerDataObject> PowerDeliveryPort::parsePDOs(const std::string &cap
     return pdos;
 }
 
-void PowerDeliveryPort::markActiveSourcePdo(int negotiatedMV)
+void PowerDeliveryPort::markActiveSourcePdo(int negotiatedMV, bool ppsContract)
 {
     // Fixed PDOs are in 50 mV units; allow a little slack for rounding.
     constexpr int kToleranceMV = 100;
-    for (auto &pdo : sourceCapabilities) {
-        if (pdo.type == PowerDataObject::FixedSupply &&
-            std::abs(pdo.voltageMV - negotiatedMV) <= kToleranceMV) {
-            pdo.isActive = true;
-            activeSourcePdoIndex = pdo.index;
-            return;
+
+    PowerDataObject *match = nullptr;
+    if (ppsContract) {
+        std::vector<PowerDataObject *> pps, containing;
+        for (auto &pdo : sourceCapabilities) {
+            if (pdo.type != PowerDataObject::PPS)
+                continue;
+            pps.push_back(&pdo);
+            if (negotiatedMV >= pdo.voltageMV - kToleranceMV &&
+                negotiatedMV <= pdo.maxVoltageMV + kToleranceMV)
+                containing.push_back(&pdo);
         }
+        // The reported voltage of an APDO contract is not reliable across
+        // drivers, so a single PPS PDO is matched without it.
+        if (pps.size() == 1)
+            match = pps.front();
+        else if (containing.size() == 1)
+            match = containing.front();
+    } else {
+        for (auto &pdo : sourceCapabilities) {
+            if (pdo.type == PowerDataObject::FixedSupply &&
+                std::abs(pdo.voltageMV - negotiatedMV) <= kToleranceMV) {
+                match = &pdo;
+                break;
+            }
+        }
+    }
+
+    if (match) {
+        match->isActive = true;
+        activeSourcePdoIndex = match->index;
     }
 }
 

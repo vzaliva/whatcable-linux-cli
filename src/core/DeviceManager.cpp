@@ -36,7 +36,8 @@ void DeviceManager::refresh()
         const auto &psy = tcPort.powerSupply;
         if (pd && tcPort.isSink() && psy && psy->online &&
             psy->voltageNowUV && *psy->voltageNowUV > 0)
-            pd->markActiveSourcePdo(*psy->voltageNowUV / 1000);
+            pd->markActiveSourcePdo(*psy->voltageNowUV / 1000,
+                                    psy->selectedUsbType() == "PD_PPS");
 
         std::optional<CableInfo> cable;
         if (tcPort.cable)

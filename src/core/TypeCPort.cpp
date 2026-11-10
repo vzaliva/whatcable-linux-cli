@@ -46,6 +46,15 @@ std::optional<int> TypeCPowerSupply::negotiatedMilliwatts() const
         (static_cast<int64_t>(*voltageNowUV) * *currentNowUA + 500000000LL) / 1000000000LL);
 }
 
+std::string TypeCPowerSupply::selectedUsbType() const
+{
+    const size_t open = usbType.find('[');
+    const size_t close = usbType.find(']', open);
+    if (open == std::string::npos || close == std::string::npos)
+        return {};
+    return usbType.substr(open + 1, close - open - 1);
+}
+
 std::optional<TypeCIdentity> TypeCPort::readIdentity(const std::string &path)
 {
     const std::string idPath = path + "/identity";
