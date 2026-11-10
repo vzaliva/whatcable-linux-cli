@@ -14,6 +14,9 @@ std::string productTypeLabel(ProductType type)
     case ProductType::AMA:          return "Alternate Mode Adapter";
     case ProductType::VPD:          return "VCONN-Powered Device";
     case ProductType::Other:        return "Other";
+    case ProductType::Host:         return "USB Host";
+    case ProductType::PowerBrick:   return "Power Brick";
+    case ProductType::PSD:          return "Power Sink Device";
     default:                        return "Unknown";
     }
 }
@@ -81,14 +84,31 @@ IDHeaderVDO decodeIDHeader(uint32_t vdo)
     default: hdr.ufpProductType = ProductType::Undefined; break;
     }
 
+    // PD 3.x ID Header, Product Type (DFP): 1 = PDUSB Hub, 2 = PDUSB Host,
+    // 3 = Power Brick; other values are reserved.
     uint8_t dfpBits = (vdo >> 23) & 0x7;
     switch (dfpBits) {
     case 1: hdr.dfpProductType = ProductType::Hub; break;
-    case 2: hdr.dfpProductType = ProductType::Peripheral; break;
+    case 2: hdr.dfpProductType = ProductType::Host; break;
+    case 3: hdr.dfpProductType = ProductType::PowerBrick; break;
     default: hdr.dfpProductType = ProductType::Undefined; break;
     }
 
     return hdr;
+}
+
+ProductType partnerProductType(const IDHeaderVDO &hdr)
+{
+    switch (hdr.ufpProductType) {
+    case ProductType::Undefined:
+        return hdr.dfpProductType;
+    case ProductType::PassiveCable:     // same code (3) means PSD on SOP
+        return ProductType::PSD;
+    case ProductType::ActiveCable:      // code 4 is reserved on SOP
+        return hdr.dfpProductType;
+    default:
+        return hdr.ufpProductType;
+    }
 }
 
 CableVDO decodeCableVDO(uint32_t vdo, bool isActive)

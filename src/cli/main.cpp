@@ -145,14 +145,17 @@ std::string jsonOptInt(const std::optional<int> &v)
 }
 
 // "identity": {...} with the raw Discover Identity VDOs. The key line is
-// indented at `depth`; the caller handles the preceding comma.
-void appendIdentityJson(std::string &s, const TypeCIdentity &id, int depth)
+// indented at `depth`; the caller handles the preceding comma. isPartner
+// selects SOP (port partner) vs SOP' (cable) product-type meanings.
+void appendIdentityJson(std::string &s, const TypeCIdentity &id, int depth, bool isPartner)
 {
     const auto hdr = decodeIDHeader(id.idHeader);
+    const ProductType type = isPartner ? partnerProductType(hdr) : hdr.ufpProductType;
     const std::pair<const char *, std::string> fields[] = {
         {"vendorId", jsonQuoted(hexVidPid(id.vendorId))},
         {"productId", jsonQuoted(hexVidPid(id.productId))},
-        {"productType", jsonQuoted(productTypeLabel(hdr.ufpProductType))},
+        {"productType", jsonQuoted(productTypeLabel(type))},
+        {"dfpProductType", jsonQuoted(productTypeLabel(hdr.dfpProductType))},
         {"idHeader", jsonQuoted(hexVdo(id.idHeader))},
         {"certStat", jsonQuoted(hexVdo(id.certStat))},
         {"product", jsonQuoted(hexVdo(id.product))},
@@ -455,7 +458,7 @@ std::string deviceToJson(const DeviceSummary &dev, bool showRaw, int depth)
                     s += "\"pd\": " + jsonQuoted(p.pdName);
                     if (p.identity) {
                         s += ',';
-                        appendIdentityJson(s, *p.identity, d3);
+                        appendIdentityJson(s, *p.identity, d3, true);
                     }
                     jsonNlIndent(s, d2);
                     s += '}';
@@ -602,7 +605,7 @@ std::string deviceToJson(const DeviceSummary &dev, bool showRaw, int depth)
                 s += "\"vendorName\": " + jsonQuoted(c.vendorName);
             });
             if (c.identity)
-                emitC([&] { appendIdentityJson(s, *c.identity, d2); });
+                emitC([&] { appendIdentityJson(s, *c.identity, d2, false); });
             jsonNlIndent(s, d1);
             s += '}';
         });

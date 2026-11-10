@@ -15,7 +15,10 @@ enum class ProductType : uint8_t {
     ActiveCable,
     AMA,         // Alternate Mode Adapter
     VPD,         // VCONN-Powered Device
-    Other
+    Other,
+    Host,        // DFP only
+    PowerBrick,  // DFP only
+    PSD          // SOP UFP code 3: Power Sink Device
 };
 
 enum class CableSpeed : uint8_t {
@@ -56,7 +59,14 @@ int cableSpeedMaxGbps(CableSpeed speed);
 std::string cableCurrentLabel(CableCurrent current);
 double cableCurrentMaxAmps(CableCurrent current);
 
+// UFP type codes are decoded for a cable plug (SOP'): 3 = passive cable,
+// 4 = active cable. For a port partner (SOP) use partnerProductType().
 IDHeaderVDO decodeIDHeader(uint32_t vdo);
+
+// What a port partner (SOP) is, from its ID header: the UFP product type
+// read with SOP meanings (3 = PSD), falling back to the DFP type for pure
+// sources such as chargers. Undefined if neither is set.
+ProductType partnerProductType(const IDHeaderVDO &hdr);
 CableVDO decodeCableVDO(uint32_t vdo, bool isActive);
 
 } // namespace WhatCable
